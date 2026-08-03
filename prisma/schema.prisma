@@ -33,20 +33,19 @@ model Order {
   id                String   @id @default(uuid())
   receiptId         String   @unique
   amount            Int
-  status            String // e.g. "PAID", "PENDING"
+  status            String   // "PAID", "PENDING"
   customerName      String
   customerEmail     String
   customerPhone     String
   shippingAddress   String
-  razorpayOrderId   String?
+  razorpayOrderId   String?  @unique // <-- Add @unique here
   razorpayPaymentId String?
   awbNumber         String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
-  // Foreign Key & Relation back to Product
-  productId String
-  product   Product @relation(fields: [productId], references: [id])
+  productId         String
+  product           Product  @relation(fields: [productId], references: [id])
 }
 
 model AuditLog {

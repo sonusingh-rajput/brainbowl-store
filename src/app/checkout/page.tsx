@@ -1,8 +1,20 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import toast from 'react-hot-toast';
-import { User, Mail, Phone, MapPin, CreditCard, ArrowLeft, ShieldCheck, Truck, RefreshCw, Building2, Globe } from 'lucide-react';
+import { useState, useEffect } from "react";
+import toast from "react-hot-toast";
+import {
+  User,
+  Mail,
+  Phone,
+  MapPin,
+  CreditCard,
+  ArrowLeft,
+  ShieldCheck,
+  Truck,
+  RefreshCw,
+  Building2,
+  Globe,
+} from "lucide-react";
 
 interface UserProfile {
   id: string;
@@ -19,32 +31,32 @@ export default function CheckoutPage() {
 
   // Structured Address State
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    streetAddress: '',
-    pincode: '',
-    district: '',
-    state: '',
+    name: "",
+    email: "",
+    phone: "",
+    streetAddress: "",
+    pincode: "",
+    district: "",
+    state: "",
   });
 
   // Fetch logged-in user profile from PostgreSQL
   useEffect(() => {
     async function initCheckout() {
       try {
-        const userRes = await fetch('/api/auth/me');
+        const userRes = await fetch("/api/auth/me");
         const userData = await userRes.json();
         if (userData.success && userData.user) {
           setUser(userData.user);
           setFormData((prev) => ({
             ...prev,
-            name: userData.user.name || '',
-            email: userData.user.email || '',
-            phone: userData.user.phone || '',
+            name: userData.user.name || "",
+            email: userData.user.email || "",
+            phone: userData.user.phone || "",
           }));
         }
       } catch (err) {
-        toast.error('Error loading session details');
+        toast.error("Error loading session details");
       } finally {
         setLoading(false);
       }
@@ -53,8 +65,10 @@ export default function CheckoutPage() {
   }, []);
 
   // Auto-Match Pincode to District & State via India Post API
-  const handlePincodeChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const code = e.target.value.replace(/\D/g, ''); // Numeric only
+  const handlePincodeChange = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const code = e.target.value.replace(/\D/g, ""); // Numeric only
     setFormData((prev) => ({ ...prev, pincode: code }));
 
     if (code.length === 6) {
@@ -63,19 +77,25 @@ export default function CheckoutPage() {
         const res = await fetch(`https://api.postalpincode.in/pincode/${code}`);
         const data = await res.json();
 
-        if (data[0] && data[0].Status === 'Success' && data[0].PostOffice?.length > 0) {
+        if (
+          data[0] &&
+          data[0].Status === "Success" &&
+          data[0].PostOffice?.length > 0
+        ) {
           const postOffice = data[0].PostOffice[0];
           setFormData((prev) => ({
             ...prev,
             district: postOffice.District,
             state: postOffice.State,
           }));
-          toast.success(`Location matched: ${postOffice.District}, ${postOffice.State} 📍`);
+          toast.success(
+            `Location matched: ${postOffice.District}, ${postOffice.State} 📍`,
+          );
         } else {
-          toast.error('Invalid Pincode. Please check and re-enter.');
+          toast.error("Invalid Pincode. Please check and re-enter.");
         }
       } catch (err) {
-        toast.error('Could not auto-verify pincode');
+        toast.error("Could not auto-verify pincode");
       } finally {
         setFetchingPincode(false);
       }
@@ -86,7 +106,9 @@ export default function CheckoutPage() {
     e.preventDefault();
 
     if (!formData.district || !formData.state) {
-      toast.error('Please enter a valid 6-digit Pincode to match District & State');
+      toast.error(
+        "Please enter a valid 6-digit Pincode to match District & State",
+      );
       return;
     }
 
@@ -96,9 +118,9 @@ export default function CheckoutPage() {
     const fullShippingAddress = `${formData.streetAddress}, ${formData.district}, ${formData.state} - ${formData.pincode}`;
 
     try {
-      const orderRes = await fetch('/api/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const orderRes = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           amount: 29900, // ₹299.00
           customerName: formData.name,
@@ -110,39 +132,44 @@ export default function CheckoutPage() {
 
       const orderData = await orderRes.json();
       if (!orderData.success) {
-        throw new Error(orderData.error || 'Failed to initialize order');
+        throw new Error(orderData.error || "Failed to initialize order");
       }
 
       const options = {
-        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+        key: orderData.key || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID, // Uses key from backend response first
         amount: orderData.amount,
-        currency: 'INR',
-        name: 'BrainBowl Superfood',
-        description: 'BrainBowl Organic Roasted Makhana Pack',
+        currency: "INR",
+        name: "BrainBowl Superfood",
+        description: "BrainBowl Organic Roasted Makhana Pack",
         order_id: orderData.razorpayOrderId,
         prefill: {
           name: formData.name,
           email: formData.email,
           contact: formData.phone,
         },
-        theme: { color: '#16a34a' },
+        theme: { color: "#16a34a" },
         handler: async function (response: any) {
-          const verifyRes = await fetch('/api/verify-payment', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              razorpayOrderId: response.razorpay_order_id,
-              razorpayPaymentId: response.razorpay_payment_id,
-              razorpaySignature: response.razorpay_signature,
-            }),
-          });
+          try {
+            const verifyRes = await fetch("/api/verify-payment", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                razorpayOrderId: response.razorpay_order_id,
+                razorpayPaymentId: response.razorpay_payment_id,
+                razorpaySignature: response.razorpay_signature,
+              }),
+            });
 
-          const verifyData = await verifyRes.json();
-          if (verifyData.success) {
-            toast.success('🎉 Payment Successful! Order confirmed.');
-            window.location.href = '/dashboard';
-          } else {
-            toast.error('Payment verification failed.');
+            const verifyData = await verifyRes.json();
+
+            if (verifyData.success) {
+              toast.success("🎉 Payment Successful! Order confirmed.");
+              window.location.href = "/dashboard";
+            } else {
+              toast.error(verifyData.error || "Payment verification failed.");
+            }
+          } catch (err) {
+            toast.error("Payment verification error");
           }
         },
       };
@@ -150,7 +177,7 @@ export default function CheckoutPage() {
       const paymentObject = new (window as any).Razorpay(options);
       paymentObject.open();
     } catch (err: any) {
-      toast.error(err.message || 'Payment initiation failed');
+      toast.error(err.message || "Payment initiation failed");
     } finally {
       setSubmitting(false);
     }
@@ -172,7 +199,10 @@ export default function CheckoutPage() {
       <script src="https://checkout.razorpay.com/v1/checkout.js" async />
 
       <div className="mx-auto max-w-4xl">
-        <a href="/" className="inline-flex items-center gap-1.5 text-xs font-bold text-[#22c55e] hover:underline mb-8">
+        <a
+          href="/"
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-[#22c55e] hover:underline mb-8"
+        >
           <ArrowLeft className="h-4 w-4" /> Return to Store
         </a>
 
@@ -180,13 +210,17 @@ export default function CheckoutPage() {
           <div className="lg:col-span-7 rounded-3xl border border-[#262626] bg-[#141414] p-8">
             <h1 className="text-2xl font-black">Shipping & Payment</h1>
             <p className="text-xs text-gray-400 mt-1">
-              {user ? '✨ Profile auto-filled from database' : 'Enter shipping and contact details'}
+              {user
+                ? "✨ Profile auto-filled from database"
+                : "Enter shipping and contact details"}
             </p>
 
             <form onSubmit={handlePayment} className="mt-8 space-y-5">
               {/* Name */}
               <div>
-                <label className="block text-xs font-semibold uppercase text-gray-400">Full Name</label>
+                <label className="block text-xs font-semibold uppercase text-gray-400">
+                  Full Name
+                </label>
                 <div className="mt-1 flex items-center rounded-xl border border-[#262626] bg-[#0a0a0a] px-3.5 py-3">
                   <User className="h-4 w-4 text-gray-500 mr-2.5" />
                   <input
@@ -195,7 +229,9 @@ export default function CheckoutPage() {
                     placeholder="Sonu Singh"
                     className="w-full bg-transparent text-sm text-white focus:outline-none"
                     value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, name: e.target.value })
+                    }
                   />
                 </div>
               </div>
@@ -203,7 +239,9 @@ export default function CheckoutPage() {
               {/* Email & Phone */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold uppercase text-gray-400">Email Address</label>
+                  <label className="block text-xs font-semibold uppercase text-gray-400">
+                    Email Address
+                  </label>
                   <div className="mt-1 flex items-center rounded-xl border border-[#262626] bg-[#0a0a0a] px-3.5 py-3">
                     <Mail className="h-4 w-4 text-gray-500 mr-2.5" />
                     <input
@@ -212,13 +250,17 @@ export default function CheckoutPage() {
                       placeholder="sonu@example.com"
                       className="w-full bg-transparent text-sm text-white focus:outline-none"
                       value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, email: e.target.value })
+                      }
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold uppercase text-gray-400">Phone Number</label>
+                  <label className="block text-xs font-semibold uppercase text-gray-400">
+                    Phone Number
+                  </label>
                   <div className="mt-1 flex items-center rounded-xl border border-[#262626] bg-[#0a0a0a] px-3.5 py-3">
                     <Phone className="h-4 w-4 text-gray-500 mr-2.5" />
                     <input
@@ -228,7 +270,9 @@ export default function CheckoutPage() {
                       placeholder="9876543210"
                       className="w-full bg-transparent text-sm text-white focus:outline-none"
                       value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, phone: e.target.value })
+                      }
                     />
                   </div>
                 </div>
@@ -236,7 +280,9 @@ export default function CheckoutPage() {
 
               {/* Street Address */}
               <div>
-                <label className="block text-xs font-semibold uppercase text-gray-400">Street / House Address</label>
+                <label className="block text-xs font-semibold uppercase text-gray-400">
+                  Street / House Address
+                </label>
                 <div className="mt-1 flex items-start rounded-xl border border-[#262626] bg-[#0a0a0a] px-3.5 py-3">
                   <MapPin className="h-4 w-4 text-gray-500 mr-2.5 mt-0.5" />
                   <textarea
@@ -245,14 +291,21 @@ export default function CheckoutPage() {
                     placeholder="Flat No, Building, Area, Landmark"
                     className="w-full bg-transparent text-sm text-white focus:outline-none resize-none"
                     value={formData.streetAddress}
-                    onChange={(e) => setFormData({ ...formData, streetAddress: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        streetAddress: e.target.value,
+                      })
+                    }
                   />
                 </div>
               </div>
 
               {/* Pincode with Auto-Lookup */}
               <div>
-                <label className="block text-xs font-semibold uppercase text-gray-400">Pincode (Auto-Lookup)</label>
+                <label className="block text-xs font-semibold uppercase text-gray-400">
+                  Pincode (Auto-Lookup)
+                </label>
                 <div className="mt-1 flex items-center rounded-xl border border-[#262626] bg-[#0a0a0a] px-3.5 py-3">
                   <Globe className="h-4 w-4 text-[#22c55e] mr-2.5" />
                   <input
@@ -264,14 +317,18 @@ export default function CheckoutPage() {
                     value={formData.pincode}
                     onChange={handlePincodeChange}
                   />
-                  {fetchingPincode && <RefreshCw className="h-4 w-4 animate-spin text-[#22c55e]" />}
+                  {fetchingPincode && (
+                    <RefreshCw className="h-4 w-4 animate-spin text-[#22c55e]" />
+                  )}
                 </div>
               </div>
 
               {/* District / City & State (Auto-Filled) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold uppercase text-gray-400">District / City</label>
+                  <label className="block text-xs font-semibold uppercase text-gray-400">
+                    District / City
+                  </label>
                   <div className="mt-1 flex items-center rounded-xl border border-[#262626] bg-[#1a1a1a] px-3.5 py-3">
                     <Building2 className="h-4 w-4 text-gray-500 mr-2.5" />
                     <input
@@ -280,13 +337,17 @@ export default function CheckoutPage() {
                       placeholder="Auto-matched"
                       className="w-full bg-transparent text-sm text-white focus:outline-none font-medium"
                       value={formData.district}
-                      onChange={(e) => setFormData({ ...formData, district: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, district: e.target.value })
+                      }
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold uppercase text-gray-400">State</label>
+                  <label className="block text-xs font-semibold uppercase text-gray-400">
+                    State
+                  </label>
                   <div className="mt-1 flex items-center rounded-xl border border-[#262626] bg-[#1a1a1a] px-3.5 py-3">
                     <Globe className="h-4 w-4 text-gray-500 mr-2.5" />
                     <input
@@ -295,7 +356,9 @@ export default function CheckoutPage() {
                       placeholder="Auto-matched"
                       className="w-full bg-transparent text-sm text-white focus:outline-none font-medium"
                       value={formData.state}
-                      onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, state: e.target.value })
+                      }
                     />
                   </div>
                 </div>
@@ -307,7 +370,7 @@ export default function CheckoutPage() {
                 className="mt-6 w-full flex items-center justify-center gap-2 rounded-xl bg-[#16a34a] py-4 text-sm font-bold text-white shadow-lg shadow-green-600/20 hover:bg-[#15803d] transition disabled:opacity-50"
               >
                 <CreditCard className="h-4 w-4" />
-                {submitting ? 'Processing Payment...' : 'Pay ₹299.00 Securely'}
+                {submitting ? "Processing Payment..." : "Pay ₹299.00 Securely"}
               </button>
             </form>
           </div>
@@ -315,12 +378,18 @@ export default function CheckoutPage() {
           {/* Order Summary Column */}
           <div className="lg:col-span-5 space-y-6">
             <div className="rounded-3xl border border-[#262626] bg-[#141414] p-8">
-              <h2 className="text-lg font-bold border-b border-[#262626] pb-4">Order Summary</h2>
+              <h2 className="text-lg font-bold border-b border-[#262626] pb-4">
+                Order Summary
+              </h2>
 
               <div className="flex items-center justify-between py-4 border-b border-[#262626]">
                 <div>
-                  <p className="text-sm font-bold text-white">BrainBowl Roasted Makhana</p>
-                  <p className="text-xs text-gray-400 mt-0.5">Quantity: 1 Pack</p>
+                  <p className="text-sm font-bold text-white">
+                    BrainBowl Roasted Makhana
+                  </p>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    Quantity: 1 Pack
+                  </p>
                 </div>
                 <span className="text-sm font-bold text-white">₹299.00</span>
               </div>
@@ -338,16 +407,20 @@ export default function CheckoutPage() {
 
               <div className="flex items-center justify-between pt-4">
                 <span className="text-sm font-bold">Total Amount</span>
-                <span className="text-xl font-black text-[#22c55e]">₹299.00</span>
+                <span className="text-xl font-black text-[#22c55e]">
+                  ₹299.00
+                </span>
               </div>
             </div>
 
             <div className="rounded-2xl border border-[#262626] bg-[#141414] p-6 space-y-3">
               <div className="flex items-center gap-3 text-xs text-gray-300">
-                <ShieldCheck className="h-5 w-5 text-[#22c55e]" /> 256-Bit SSL Encrypted Payment
+                <ShieldCheck className="h-5 w-5 text-[#22c55e]" /> 256-Bit SSL
+                Encrypted Payment
               </div>
               <div className="flex items-center gap-3 text-xs text-gray-300">
-                <Truck className="h-5 w-5 text-[#22c55e]" /> Dispatched within 24 hours
+                <Truck className="h-5 w-5 text-[#22c55e]" /> Dispatched within
+                24 hours
               </div>
             </div>
           </div>

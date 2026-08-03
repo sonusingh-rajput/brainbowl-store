@@ -1,22 +1,28 @@
-import { NextResponse } from 'next/server';
-import Razorpay from 'razorpay';
-import { prisma } from '@/lib/prisma';
+import { NextResponse } from "next/server";
+import Razorpay from "razorpay";
+import { prisma } from "@/lib/prisma";
 
 const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID || '',
-  key_secret: process.env.RAZORPAY_KEY_SECRET || '',
+  key_id: process.env.RAZORPAY_KEY_ID || "",
+  key_secret: process.env.RAZORPAY_KEY_SECRET || "",
 });
 
 export async function POST(req: Request) {
   try {
-    const { amount, customerName, customerEmail, customerPhone, shippingAddress } = await req.json();
+    const {
+      amount,
+      customerName,
+      customerEmail,
+      customerPhone,
+      shippingAddress,
+    } = await req.json();
 
     // Find or create default Product record in PostgreSQL
     let product = await prisma.product.findFirst();
     if (!product) {
       product = await prisma.product.create({
         data: {
-          name: 'BrainBowl Classic Roasted Makhana (250g)',
+          name: "BrainBowl Classic Roasted Makhana (250g)",
           price: amount || 29900,
           stock: 100,
         },
@@ -28,7 +34,7 @@ export async function POST(req: Request) {
     // Create Razorpay Order
     const razorpayOrder = await razorpay.orders.create({
       amount: amount || 29900,
-      currency: 'INR',
+      currency: "INR",
       receipt: receiptId,
     });
 
@@ -37,7 +43,7 @@ export async function POST(req: Request) {
       data: {
         receiptId: receiptId,
         amount: amount || 29900,
-        status: 'PENDING',
+        status: "PENDING",
         customerName,
         customerEmail,
         customerPhone,
@@ -49,13 +55,14 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       success: true,
+      key: process.env.RAZORPAY_KEY_ID, // Send key ID to client safely
       razorpayOrderId: razorpayOrder.id,
       amount: razorpayOrder.amount,
     });
   } catch (error: any) {
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to initiate checkout' },
-      { status: 500 }
+      { success: false, error: error.message || "Failed to initiate checkout" },
+      { status: 500 },
     );
   }
 }
