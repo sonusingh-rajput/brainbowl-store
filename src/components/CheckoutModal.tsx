@@ -1,10 +1,16 @@
 'use client';
 
+// ============================================================================
+// 1. IMPORTS
+// ============================================================================
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, User, Mail, Phone, MapPin, CreditCard } from 'lucide-react';
+import { X, User, Mail, Phone, MapPin, CreditCard, Truck } from 'lucide-react';
 import toast from 'react-hot-toast';
 
+// ============================================================================
+// 2. INTERFACES
+// ============================================================================
 interface UserProfile {
   id: string;
   name: string;
@@ -14,7 +20,7 @@ interface UserProfile {
 
 interface CheckoutModalProps {
   productId: string;
-  price: number;
+  price: number; // Product base price in paise (e.g., 29900 = ₹299.00)
   isOpen: boolean;
   onClose: () => void;
   user: UserProfile | null;
@@ -27,9 +33,18 @@ export default function CheckoutModal({
   onClose,
   user,
 }: CheckoutModalProps) {
+  // ============================================================================
+  // 3. COMPONENT STATES
+  // ============================================================================
   const [loading, setLoading] = useState(false);
 
-  // Form state initialized with auto-fetched user data or fallback defaults
+  // Global Shipping Settings State (Loaded from API)
+  const [shippingRules, setShippingSettings] = useState({
+    freeShippingMinAmount: 99900, // ₹999 in paise
+    standardShippingFee: 9900,    // ₹99 in paise
+  });
+
+  // Form State
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -37,7 +52,31 @@ export default function CheckoutModal({
     address: '',
   });
 
-  // Auto-fill form whenever modal opens or user logs in
+  // ============================================================================
+  // 4. EFFECTS & CALCULATIONS
+  // ============================================================================
+  // Fetch global store shipping settings
+  useEffect(() => {
+    async function fetchShippingSettings() {
+      try {
+        const res = await fetch('/api/admin/settings');
+        const data = await res.json();
+        if (data.success && data.data) {
+          setShippingSettings({
+            freeShippingMinAmount: data.data.freeShippingMinAmount,
+            standardShippingFee: data.data.standardShippingFee,
+          });
+        }
+      } catch {
+        // Fallback to defaults if settings API fails
+      }
+    }
+    if (isOpen) {
+      fetchShippingSettings();
+    }
+  }, [isOpen]);
+
+  // Auto-fill form when user logs in or modal opens
   useEffect(() => {
     if (user) {
       setFormData((prev) => ({
@@ -49,8 +88,16 @@ export default function CheckoutModal({
     }
   }, [user, isOpen]);
 
+  // Determine if shipping is free or subject to standard fee
+  const isFreeShipping = price >= shippingRules.freeShippingMinAmount;
+  const shippingFee = isFreeShipping ? 0 : shippingRules.standardShippingFee;
+  const grandTotal = price + shippingFee;
+
   if (!isOpen) return null;
 
+  // ============================================================================
+  // 5. CHECKOUT & PAYMENT HANDLER
+  // ============================================================================
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -62,7 +109,8 @@ export default function CheckoutModal({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           productId,
-          amount: price,
+          amount: grandTotal,
+          shippingCost: shippingFee,
           customerName: formData.name,
           customerEmail: formData.email,
           customerPhone: formData.phone,
@@ -72,12 +120,12 @@ export default function CheckoutModal({
 
       const orderData = await orderRes.json();
       if (!orderData.success) {
-        throw new Error(orderData.error || 'Failed to initialize order');
+        throw new Error(orderData.error || 'Failed to initialize checkout');
       }
 
       // 2. Trigger Razorpay Checkout Popup
       const options = {
-        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+        key: orderData.key || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
         amount: orderData.amount,
         currency: 'INR',
         name: 'BrainBowl Superfood',
@@ -109,7 +157,7 @@ export default function CheckoutModal({
             onClose();
             window.location.href = '/dashboard';
           } else {
-            toast.error('Payment verification failed.');
+            toast.error(verifyData.error || 'Payment verification failed.');
           }
         },
       };
@@ -123,6 +171,9 @@ export default function CheckoutModal({
     }
   };
 
+  // ============================================================================
+  // 6. UI RENDER
+  // ============================================================================
   return (
     <AnimatePresence>
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-md">
@@ -130,13 +181,14 @@ export default function CheckoutModal({
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.95 }}
-          className="w-full max-w-lg rounded-3xl border border-[#262626] bg-[#141414] p-8 shadow-2xl text-white"
+          className="w-full max-w-lg rounded-3xl border border-[#262626] bg-[#141414] p-8 shadow-2xl text-white max-h-[90vh] overflow-y-auto"
         >
+          {/* Header */}
           <div className="flex items-center justify-between pb-6 border-b border-[#262626]">
             <div>
               <h2 className="text-xl font-bold">Complete Your Order</h2>
               <p className="text-xs text-gray-400 mt-0.5">
-                {user ? '✨ Details auto-filled from your profile' : 'Enter shipping details'}
+                {user ? '✨ Details auto-filled from your profile' : 'Enter shipping details below'}
               </p>
             </div>
             <button onClick={onClose} className="text-gray-400 hover:text-white transition">
@@ -195,7 +247,7 @@ export default function CheckoutModal({
                   placeholder="9876543210"
                   className="w-full bg-transparent text-sm text-white focus:outline-none"
                   value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value.replace(/\D/g, '') })}
                 />
               </div>
             </div>
@@ -218,12 +270,39 @@ export default function CheckoutModal({
               </div>
             </div>
 
-            {/* Price & Action Button */}
+            {/* Shipping Summary & Price Breakdown */}
+            <div className="rounded-2xl border border-[#262626] bg-[#0a0a0a] p-4 space-y-2">
+              <div className="flex items-center justify-between text-xs text-gray-400">
+                <span>Product Subtotal</span>
+                <span className="font-semibold text-white">₹{(price / 100).toFixed(2)}</span>
+              </div>
+
+              <div className="flex items-center justify-between text-xs text-gray-400">
+                <span className="flex items-center gap-1">
+                  <Truck className="h-3.5 w-3.5 text-[#22c55e]" /> Shipping Fee
+                </span>
+                {isFreeShipping ? (
+                  <span className="font-bold text-[#22c55e] uppercase">FREE</span>
+                ) : (
+                  <span className="font-semibold text-white">
+                    +₹{(shippingFee / 100).toFixed(2)}
+                  </span>
+                )}
+              </div>
+
+              {!isFreeShipping && (
+                <p className="text-[10px] text-amber-400 pt-1 border-t border-[#262626]">
+                  💡 Add items worth ₹{((shippingRules.freeShippingMinAmount - price) / 100).toFixed(0)} more for FREE shipping!
+                </p>
+              )}
+            </div>
+
+            {/* Grand Total & Pay Button */}
             <div className="pt-4 border-t border-[#262626] flex items-center justify-between">
               <div>
-                <span className="block text-xs text-gray-400">Total Payable</span>
+                <span className="block text-xs text-gray-400">Grand Total</span>
                 <span className="text-xl font-black text-[#22c55e]">
-                  ₹{(price / 100).toFixed(2)}
+                  ₹{(grandTotal / 100).toFixed(2)}
                 </span>
               </div>
 

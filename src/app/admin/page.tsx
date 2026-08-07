@@ -1,7 +1,10 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from "react";
-import toast from "react-hot-toast";
+// ============================================================================
+// 1. IMPORTS & LIBRARIES
+// ============================================================================
+import { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import {
   IndianRupee,
   Users,
@@ -11,7 +14,61 @@ import {
   ArrowLeft,
   Lock,
   LogOut,
-} from "lucide-react";
+  Trash2,
+  Plus,
+  Edit2,
+  ExternalLink,
+  Layers,
+  CheckCircle,
+  XCircle,
+  Save,
+  Image as ImageIcon,
+  Search,
+  Tag,
+  Truck,
+} from 'lucide-react';
+
+// Chart.js Registration for Admin Graphics
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  ArcElement,
+} from 'chart.js';
+import { Line, Doughnut } from 'react-chartjs-2';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  BarElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend
+);
+
+// ============================================================================
+// 2. TYPES & INTERFACES
+// ============================================================================
+interface ProductItem {
+  id: string;
+  name: string;
+  sku?: string;
+  price: number; // Stored in paise (e.g. 29900 = ₹299.00)
+  stock: number;
+  imageUrl?: string;
+  description?: string;
+  seoTitle?: string;
+  seoDescription?: string;
+}
 
 interface OrderItem {
   id: string;
@@ -20,45 +77,88 @@ interface OrderItem {
   amount: number;
   status: string;
   awbNumber?: string | null;
+  courierUrl?: string | null;
   createdAt: string;
 }
 
-interface DashboardStats {
-  totalSales: number;
-  totalUsers: number;
-  totalOrders: number;
-  pendingOrders: number;
-  products: Array<{ id: string; name: string; price: number; stock: number }>;
-  recentUsers: Array<{
-    id: string;
-    name: string;
-    email: string;
-    phone: string;
-    createdAt: string;
-  }>;
-  recentOrders: OrderItem[];
+interface UserItem {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  createdAt: string;
 }
 
 export default function AdminDashboard() {
+  // ============================================================================
+  // 3. COMPONENT STATES
+  // ============================================================================
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
-  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [activeTab, setActiveTab] = useState<'overview' | 'orders' | 'products' | 'users'>('overview');
   const [loading, setLoading] = useState(false);
-  const [updatingAwb, setUpdatingAwb] = useState<string | null>(null);
 
-  // Login form state
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
+  // Global Shipping Settings State
+  const [shippingSettings, setShippingSettings] = useState({
+    freeShippingMinAmount: '999',
+    standardShippingFee: '99',
+  });
+  const [savingSettings, setSavingSettings] = useState(false);
+
+  // Global Dashboard Stats
+  const [stats, setStats] = useState({
+    totalSales: 0,
+    totalUsers: 0,
+    totalOrders: 0,
+    pendingOrders: 0,
+  });
+
+  // Table Collections
+  const [orders, setOrders] = useState<OrderItem[]>([]);
+  const [users, setUsers] = useState<UserItem[]>([]);
+  const [products, setProducts] = useState<ProductItem[]>([]);
+
+  // Customer Table Search & Pagination State
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [userPage, setUserPage] = useState(1);
+  const USERS_PER_PAGE = 5;
+
+  // Inline AWB & Courier Link Editing State
+  const [editingAwbId, setEditingAwbId] = useState<string | null>(null);
+  const [awbInputs, setAwbInputs] = useState<{
+    [key: string]: { awbNumber: string; courierUrl: string };
+  }>({});
+
+  // Product Drawer / Modal Form State
+  const [productModalOpen, setProductModalOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<ProductItem | null>(null);
+  const [productForm, setProductForm] = useState({
+    name: '',
+    sku: '',
+    price: '299',
+    stock: '100',
+    imageUrl: '',
+    description: '',
+    seoTitle: '',
+    seoDescription: '',
+  });
+
+  // Admin Auth Form State
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
 
-  // Check admin authentication state on load
+  // ============================================================================
+  // 4. AUTHENTICATION & DATA FETCHING HANDLERS
+  // ============================================================================
   useEffect(() => {
     async function checkAuth() {
       try {
-        const res = await fetch("/api/admin/me");
+        const res = await fetch('/api/admin/me');
         const data = await res.json();
         if (data.authenticated) {
           setAuthenticated(true);
-          fetchStats();
+          fetchAllData();
+          fetchSettings();
         } else {
           setAuthenticated(false);
         }
@@ -69,16 +169,60 @@ export default function AdminDashboard() {
     checkAuth();
   }, []);
 
-  const fetchStats = async () => {
-    setLoading(true);
+  const fetchSettings = async () => {
     try {
-      const res = await fetch("/api/admin/stats");
+      const res = await fetch('/api/admin/settings');
       const data = await res.json();
-      if (data.success) {
-        setStats(data.data);
+      if (data.success && data.data) {
+        setShippingSettings({
+          freeShippingMinAmount: (data.data.freeShippingMinAmount / 100).toString(),
+          standardShippingFee: (data.data.standardShippingFee / 100).toString(),
+        });
       }
     } catch {
-      toast.error("Failed to load metrics");
+      toast.error('Failed to load shipping settings');
+    }
+  };
+
+  const fetchAllData = async () => {
+    setLoading(true);
+    try {
+      const [statsRes, prodRes] = await Promise.all([
+        fetch('/api/admin/stats'),
+        fetch('/api/admin/products'),
+      ]);
+
+      const statsData = await statsRes.json();
+      const prodData = await prodRes.json();
+
+      if (statsData.success) {
+        setStats({
+          totalSales: statsData.data.totalSales,
+          totalUsers: statsData.data.totalUsers,
+          totalOrders: statsData.data.totalOrders,
+          pendingOrders: statsData.data.pendingOrders,
+        });
+
+        const fetchedOrders: OrderItem[] = statsData.data.recentOrders || [];
+        setOrders(fetchedOrders);
+        setUsers(statsData.data.recentUsers || []);
+
+        // Initialize local inline input values for AWB and Links
+        const initialAwbInputs: any = {};
+        fetchedOrders.forEach((order) => {
+          initialAwbInputs[order.id] = {
+            awbNumber: order.awbNumber || '',
+            courierUrl: order.courierUrl || '',
+          };
+        });
+        setAwbInputs(initialAwbInputs);
+      }
+
+      if (prodData.success) {
+        setProducts(prodData.data || []);
+      }
+    } catch {
+      toast.error('Failed to load dashboard data');
     } finally {
       setLoading(false);
     }
@@ -87,118 +231,281 @@ export default function AdminDashboard() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginLoading(true);
-
     try {
-      const res = await fetch("/api/admin/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       });
-
       const data = await res.json();
+      if (!data.success) throw new Error(data.error);
 
-      if (!data.success) {
-        throw new Error(data.error || "Invalid credentials");
-      }
-
-      toast.success("Admin login successful 👋");
+      toast.success('Admin Sign In Successful 👋');
       setAuthenticated(true);
-      fetchStats();
+      fetchAllData();
+      fetchSettings();
     } catch (err: any) {
-      toast.error(err.message || "Login failed");
+      toast.error(err.message || 'Invalid credentials');
     } finally {
       setLoginLoading(false);
     }
   };
 
-  const handleLogout = async () => {
-    await fetch("/api/admin/logout", { method: "POST" });
-    setAuthenticated(false);
-    setStats(null);
-    toast.success("Admin logged out");
-  };
-
-  const handleSaveAwb = async (orderId: string, awbNumber: string) => {
-    setUpdatingAwb(orderId);
+  // ============================================================================
+  // 5. GLOBAL SHIPPING SETTINGS HANDLER
+  // ============================================================================
+  const handleSaveShippingSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingSettings(true);
     try {
-      const res = await fetch("/api/admin/orders/update-awb", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId, awbNumber }),
+      const res = await fetch('/api/admin/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          freeShippingMinAmount: shippingSettings.freeShippingMinAmount,
+          standardShippingFee: shippingSettings.standardShippingFee,
+        }),
       });
 
       const data = await res.json();
       if (data.success) {
-        toast.success("AWB Tracking Number Updated! 🚚");
-        fetchStats();
+        toast.success('🚚 Global Shipping Rules Updated!');
       } else {
         throw new Error(data.error);
       }
     } catch (err: any) {
-      toast.error(err.message || "Failed to update AWB");
+      toast.error(err.message || 'Failed to update shipping rules');
     } finally {
-      setUpdatingAwb(null);
+      setSavingSettings(false);
     }
   };
 
+  // ============================================================================
+  // 6. ORDER & AWB ACTION HANDLERS
+  // ============================================================================
+  const handleSaveAwbAndLink = async (orderId: string) => {
+    const input = awbInputs[orderId];
+    try {
+      const res = await fetch('/api/admin/orders', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId,
+          awbNumber: input?.awbNumber || '',
+          courierUrl: input?.courierUrl || '',
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        toast.success('AWB Number & Tracking Link Saved! 🚚');
+
+        setOrders((prevOrders) =>
+          prevOrders.map((o) =>
+            o.id === orderId
+              ? {
+                  ...o,
+                  awbNumber: input?.awbNumber || null,
+                  courierUrl: input?.courierUrl || null,
+                }
+              : o
+          )
+        );
+        setEditingAwbId(null);
+      } else {
+        throw new Error(data.error);
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to save tracking details');
+    }
+  };
+
+  const handleUpdateStatus = async (orderId: string, newStatus: 'PAID' | 'CANCELLED' | 'PENDING') => {
+    try {
+      const res = await fetch('/api/admin/orders', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, status: newStatus }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        toast.success(`Order status updated to ${newStatus} 🎯`);
+        fetchAllData();
+      } else {
+        throw new Error(data.error);
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to update order status');
+    }
+  };
+
+  const handleDeleteOrder = async (orderId: string) => {
+    if (!confirm('Are you sure you want to delete this order?')) return;
+    try {
+      const res = await fetch('/api/admin/orders', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success('Order deleted 🗑️');
+        fetchAllData();
+      } else {
+        throw new Error(data.error);
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to delete order');
+    }
+  };
+
+  // ============================================================================
+  // 7. SHOPIFY PRODUCT ACTION HANDLERS
+  // ============================================================================
+  const openProductModal = (prod?: ProductItem) => {
+    if (prod) {
+      setEditingProduct(prod);
+      setProductForm({
+        name: prod.name,
+        sku: prod.sku || '',
+        price: (prod.price / 100).toString(),
+        stock: prod.stock.toString(),
+        imageUrl: prod.imageUrl || '',
+        description: prod.description || '',
+        seoTitle: prod.seoTitle || '',
+        seoDescription: prod.seoDescription || '',
+      });
+    } else {
+      setEditingProduct(null);
+      setProductForm({
+        name: '',
+        sku: '',
+        price: '299',
+        stock: '100',
+        imageUrl: '',
+        description: '',
+        seoTitle: '',
+        seoDescription: '',
+      });
+    }
+    setProductModalOpen(true);
+  };
+
+  const handleSaveProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/admin/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingProduct?.id,
+          ...productForm,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        toast.success(editingProduct ? 'Product Updated! ✏️' : 'New Product Added! 📦');
+        setProductModalOpen(false);
+        fetchAllData();
+      } else {
+        throw new Error(data.error);
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to save product');
+    }
+  };
+
+  // ============================================================================
+  // 8. CUSTOMER SEARCH & PAGINATION LOGIC
+  // ============================================================================
+  const filteredUsers = users.filter(
+    (u) =>
+      u.name?.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+      u.email?.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+      u.phone?.includes(userSearchQuery)
+  );
+
+  const paginatedUsers = filteredUsers.slice(
+    (userPage - 1) * USERS_PER_PAGE,
+    userPage * USERS_PER_PAGE
+  );
+
+  // ============================================================================
+  // 9. GRAPHICS & CHART CONFIGURATIONS
+  // ============================================================================
+  const lineChartData = {
+    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug'],
+    datasets: [
+      {
+        label: 'Revenue (₹)',
+        data: [1200, 2900, 4500, 3100, 6800, 8900, stats.totalSales || 12000],
+        borderColor: '#22c55e',
+        backgroundColor: 'rgba(34, 197, 94, 0.1)',
+        tension: 0.4,
+        fill: true,
+      },
+    ],
+  };
+
+  const doughnutData = {
+    labels: ['Paid Orders', 'Pending Orders', 'Cancelled'],
+    datasets: [
+      {
+        data: [
+          orders.filter((o) => o.status === 'PAID').length || 1,
+          orders.filter((o) => o.status === 'PENDING').length || 0,
+          orders.filter((o) => o.status === 'CANCELLED').length || 0,
+        ],
+        backgroundColor: ['#16a34a', '#f59e0b', '#dc2626'],
+        borderWidth: 0,
+      },
+    ],
+  };
+
+  // ============================================================================
+  // 10. LOGIN SCREEN FOR UNAUTHENTICATED USERS
+  // ============================================================================
   if (authenticated === null) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] text-white flex items-center justify-center text-sm text-gray-400">
-        Verifying security credentials...
+      <div className="min-h-screen bg-[#0a0a0a] text-white flex items-center justify-center text-xs">
+        Verifying administrator session...
       </div>
     );
   }
 
-  // 1. RENDER LOGIN FORM IF NOT AUTHENTICATED
   if (!authenticated) {
     return (
-      <div className="min-h-screen bg-[#0a0a0a] text-white flex items-center justify-center p-4 font-sans">
+      <div className="min-h-screen bg-[#0a0a0a] text-white flex items-center justify-center p-4">
         <div className="w-full max-w-md rounded-3xl border border-[#262626] bg-[#141414] p-8 shadow-2xl">
           <div className="text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-green-950/50 text-[#22c55e] border border-green-800/40">
-              <Lock className="h-6 w-6" />
-            </div>
-            <h1 className="mt-4 text-2xl font-black">Admin Access Control</h1>
-            <p className="mt-1 text-xs text-gray-400">
-              Enter your administrator username and password.
-            </p>
+            <Lock className="h-8 w-8 text-[#22c55e] mx-auto" />
+            <h1 className="mt-4 text-2xl font-black">Admin Sign In</h1>
           </div>
-
           <form onSubmit={handleLogin} className="mt-6 space-y-4">
-            <div>
-              <label className="block text-xs font-semibold uppercase text-gray-400">
-                Username
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="admin"
-                className="mt-1 w-full rounded-xl border border-[#262626] bg-[#0a0a0a] p-3 text-sm text-white focus:border-[#22c55e] focus:outline-none"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold uppercase text-gray-400">
-                Password
-              </label>
-              <input
-                type="password"
-                required
-                placeholder="••••••••"
-                className="mt-1 w-full rounded-xl border border-[#262626] bg-[#0a0a0a] p-3 text-sm text-white focus:border-[#22c55e] focus:outline-none"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-
+            <input
+              type="text"
+              required
+              placeholder="Username"
+              className="w-full rounded-xl border border-[#262626] bg-[#0a0a0a] p-3 text-sm text-white focus:border-[#22c55e] focus:outline-none"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+            />
+            <input
+              type="password"
+              required
+              placeholder="Password"
+              className="w-full rounded-xl border border-[#262626] bg-[#0a0a0a] p-3 text-sm text-white focus:border-[#22c55e] focus:outline-none"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
             <button
               type="submit"
               disabled={loginLoading}
-              className="mt-6 w-full rounded-xl bg-[#16a34a] py-3 text-sm font-bold text-white shadow-lg shadow-green-600/20 hover:bg-[#15803d] transition disabled:opacity-50"
+              className="w-full rounded-xl bg-[#16a34a] py-3 text-sm font-bold text-white hover:bg-[#15803d]"
             >
-              {loginLoading ? "Authenticating..." : "Sign In to Dashboard"}
+              {loginLoading ? 'Authenticating...' : 'Sign In'}
             </button>
           </form>
         </div>
@@ -206,239 +513,558 @@ export default function AdminDashboard() {
     );
   }
 
-  // 2. RENDER DASHBOARD METRICS IF AUTHENTICATED
+  // ============================================================================
+  // 11. MAIN DASHBOARD UI RENDER
+  // ============================================================================
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white p-6 md:p-10 font-sans">
       <div className="mx-auto max-w-7xl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-8 border-b border-[#262626]">
+        {/* SECTION A: TOP BAR */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-[#262626]">
           <div>
-            <a
-              href="/"
-              className="flex items-center gap-1 text-xs font-bold text-[#22c55e] hover:underline mb-2"
-            >
+            <a href="/" className="flex items-center gap-1 text-xs font-bold text-[#22c55e] hover:underline mb-2">
               <ArrowLeft className="h-3.5 w-3.5" /> Back to Store
             </a>
-            <h1 className="text-3xl font-black tracking-tight">
-              Admin Control Panel
-            </h1>
-            <p className="text-xs text-gray-400 mt-1">
-              Real-time metrics for sales, inventory, and registered users.
-            </p>
+            <h1 className="text-3xl font-black tracking-tight">Shopify-Style Admin Control Center</h1>
           </div>
 
           <div className="flex items-center gap-3">
             <button
-              onClick={fetchStats}
+              onClick={fetchAllData}
               disabled={loading}
-              className="flex items-center gap-2 bg-[#141414] border border-[#262626] px-4 py-2.5 rounded-xl text-xs font-semibold hover:bg-[#1f1f1f] transition"
+              className="flex items-center gap-2 bg-[#141414] border border-[#262626] px-4 py-2.5 rounded-xl text-xs font-semibold hover:bg-[#1f1f1f]"
             >
-              <RefreshCw
-                className={`h-4 w-4 text-[#22c55e] ${loading ? "animate-spin" : ""}`}
-              />
-              Refresh
+              <RefreshCw className={`h-4 w-4 text-[#22c55e] ${loading ? 'animate-spin' : ''}`} /> Refresh
             </button>
-
             <button
-              onClick={handleLogout}
-              className="flex items-center gap-1.5 bg-red-950/20 border border-red-900/40 text-red-400 px-4 py-2.5 rounded-xl text-xs font-semibold hover:bg-red-900/30 transition"
+              onClick={async () => {
+                await fetch('/api/admin/logout', { method: 'POST' });
+                setAuthenticated(false);
+              }}
+              className="flex items-center gap-1.5 bg-red-950/20 border border-red-900/40 text-red-400 px-4 py-2.5 rounded-xl text-xs font-semibold hover:bg-red-900/30"
             >
               <LogOut className="h-4 w-4" /> Logout
             </button>
           </div>
         </div>
 
-        {/* Metric Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-8">
-          <div className="rounded-2xl border border-[#262626] bg-[#141414] p-6">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase text-gray-400">
-                Total Sales
-              </span>
-              <div className="rounded-lg bg-green-950/50 p-2 text-[#22c55e] border border-green-800/40">
-                <IndianRupee className="h-5 w-5" />
-              </div>
+        {/* SECTION B: GLOBAL SHIPPING COST SETTINGS BOX */}
+        <div className="mt-6 rounded-3xl border border-[#262626] bg-[#141414] p-6">
+          <div className="flex items-center gap-3 pb-4 border-b border-[#262626]">
+            <div className="p-2.5 rounded-2xl bg-green-950/50 border border-green-800/40 text-[#22c55e]">
+              <Truck className="h-6 w-6" />
             </div>
-            <p className="mt-4 text-3xl font-black text-white">
-              ₹{stats ? stats.totalSales.toLocaleString("en-IN") : "0.00"}
-            </p>
-            <span className="text-[10px] text-gray-500">
-              From verified paid orders
-            </span>
+            <div>
+              <h2 className="text-base font-black text-white">Global Shipping Cost Settings</h2>
+              <p className="text-xs text-gray-400">
+                Set shipping charge rules (Free shipping above ₹ threshold, and standard shipping fee below).
+              </p>
+            </div>
           </div>
 
-          <div className="rounded-2xl border border-[#262626] bg-[#141414] p-6">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase text-gray-400">
-                Total Users
+          <form onSubmit={handleSaveShippingSettings} className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 items-end">
+            <div>
+              <label className="block text-xs font-semibold text-gray-400 uppercase">
+                Free Shipping Minimum Amount (₹)
+              </label>
+              <input
+                type="number"
+                required
+                placeholder="999"
+                className="mt-1 w-full rounded-xl border border-[#262626] bg-[#0a0a0a] p-3 text-xs text-white focus:border-[#22c55e] focus:outline-none"
+                value={shippingSettings.freeShippingMinAmount}
+                onChange={(e) => setShippingSettings({ ...shippingSettings, freeShippingMinAmount: e.target.value })}
+              />
+              <span className="text-[10px] text-gray-500 mt-1 block">
+                Free shipping applied for order total &gt; ₹{shippingSettings.freeShippingMinAmount || '999'}
               </span>
-              <div className="rounded-lg bg-blue-950/50 p-2 text-blue-400 border border-blue-800/40">
-                <Users className="h-5 w-5" />
-              </div>
             </div>
-            <p className="mt-4 text-3xl font-black text-white">
-              {stats ? stats.totalUsers : 0}
-            </p>
-            <span className="text-[10px] text-gray-500">
-              Registered PostgreSQL accounts
-            </span>
-          </div>
 
-          <div className="rounded-2xl border border-[#262626] bg-[#141414] p-6">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase text-gray-400">
-                Total Orders
+            <div>
+              <label className="block text-xs font-semibold text-gray-400 uppercase">
+                Standard Shipping Fee (₹)
+              </label>
+              <input
+                type="number"
+                required
+                placeholder="99"
+                className="mt-1 w-full rounded-xl border border-[#262626] bg-[#0a0a0a] p-3 text-xs text-white focus:border-[#22c55e] focus:outline-none"
+                value={shippingSettings.standardShippingFee}
+                onChange={(e) => setShippingSettings({ ...shippingSettings, standardShippingFee: e.target.value })}
+              />
+              <span className="text-[10px] text-gray-500 mt-1 block">
+                Charged on orders &lt; ₹{shippingSettings.freeShippingMinAmount || '999'}
               </span>
-              <div className="rounded-lg bg-purple-950/50 p-2 text-purple-400 border border-purple-800/40">
-                <ShoppingBag className="h-5 w-5" />
-              </div>
             </div>
-            <p className="mt-4 text-3xl font-black text-white">
-              {stats ? stats.totalOrders : 0}
-            </p>
-            <span className="text-[10px] text-gray-500">
-              {stats ? stats.pendingOrders : 0} Pending Checkouts
-            </span>
-          </div>
 
-          <div className="rounded-2xl border border-[#262626] bg-[#141414] p-6">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase text-gray-400">
-                Products Stock
-              </span>
-              <div className="rounded-lg bg-amber-950/50 p-2 text-amber-400 border border-amber-800/40">
-                <Package className="h-5 w-5" />
-              </div>
+            <div>
+              <button
+                type="submit"
+                disabled={savingSettings}
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-[#16a34a] py-3 text-xs font-bold text-white shadow-lg hover:bg-[#15803d] disabled:opacity-50 transition"
+              >
+                <Save className="h-4 w-4" />
+                {savingSettings ? 'Saving...' : 'Save Shipping Rules'}
+              </button>
             </div>
-            <p className="mt-4 text-3xl font-black text-white">
-              {stats && stats.products.length > 0 ? stats.products[0].stock : 0}{" "}
-              units
-            </p>
-            <span className="text-[10px] text-gray-500">
-              Active inventory available
-            </span>
-          </div>
+          </form>
         </div>
 
-        {/* Data Tables */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-10">
-          {/* Recent Users Table */}
-          <div className="rounded-2xl border border-[#262626] bg-[#141414] p-6">
-            <h2 className="text-lg font-bold text-white mb-4">
-              Recent Registered Users
-            </h2>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-gray-300">
-                <thead className="border-b border-[#262626] text-gray-400 uppercase">
-                  <tr>
-                    <th className="py-3 px-2">Name</th>
-                    <th className="py-3 px-2">Email</th>
-                    <th className="py-3 px-2">Phone</th>
-                    <th className="py-3 px-2">Date</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#262626]">
-                  {stats && stats.recentUsers.length > 0 ? (
-                    stats.recentUsers.map((user) => (
-                      <tr key={user.id} className="hover:bg-[#1a1a1a]">
-                        <td className="py-3 px-2 font-semibold text-white">
-                          {user.name}
-                        </td>
-                        <td className="py-3 px-2">{user.email}</td>
-                        <td className="py-3 px-2">{user.phone}</td>
-                        <td className="py-3 px-2 text-gray-500">
-                          {new Date(user.createdAt).toLocaleDateString("en-IN")}
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td
-                        colSpan={4}
-                        className="py-6 text-center text-gray-500"
-                      >
-                        No users found.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+        {/* SECTION C: NAVIGATION TABS */}
+        <div className="flex items-center gap-2 mt-6 border-b border-[#262626] pb-3 overflow-x-auto">
+          {[
+            { id: 'overview', label: 'Overview Graphics', icon: Layers },
+            { id: 'products', label: `Products Catalog (${products.length})`, icon: Package },
+            { id: 'orders', label: `Orders & AWB (${orders.length})`, icon: ShoppingBag },
+            { id: 'users', label: `Customers (${users.length})`, icon: Users },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
+                activeTab === tab.id
+                  ? 'bg-[#16a34a] text-white shadow-lg'
+                  : 'bg-[#141414] border border-[#262626] text-gray-400 hover:text-white'
+              }`}
+            >
+              <tab.icon className="h-4 w-4" />
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* SECTION D: OVERVIEW GRAPHICS (CHART.JS) */}
+        {activeTab === 'overview' && (
+          <div className="mt-8 space-y-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="rounded-2xl border border-[#262626] bg-[#141414] p-6">
+                <span className="text-xs font-bold uppercase text-gray-400">Total Sales</span>
+                <p className="mt-3 text-3xl font-black text-white">₹{stats.totalSales.toLocaleString('en-IN')}</p>
+              </div>
+              <div className="rounded-2xl border border-[#262626] bg-[#141414] p-6">
+                <span className="text-xs font-bold uppercase text-gray-400">Total Customers</span>
+                <p className="mt-3 text-3xl font-black text-white">{stats.totalUsers}</p>
+              </div>
+              <div className="rounded-2xl border border-[#262626] bg-[#141414] p-6">
+                <span className="text-xs font-bold uppercase text-gray-400">Total Orders</span>
+                <p className="mt-3 text-3xl font-black text-white">{stats.totalOrders}</p>
+              </div>
+              <div className="rounded-2xl border border-[#262626] bg-[#141414] p-6">
+                <span className="text-xs font-bold uppercase text-gray-400">Total Inventory</span>
+                <p className="mt-3 text-3xl font-black text-white">
+                  {products.reduce((acc, p) => acc + p.stock, 0)} units
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="lg:col-span-2 rounded-2xl border border-[#262626] bg-[#141414] p-6">
+                <h3 className="text-sm font-bold text-gray-400 uppercase mb-4">Monthly Revenue Chart</h3>
+                <div className="h-64">
+                  <Line data={lineChartData} options={{ responsive: true, maintainAspectRatio: false }} />
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-[#262626] bg-[#141414] p-6 flex flex-col items-center justify-center">
+                <h3 className="text-sm font-bold text-gray-400 uppercase mb-4">Order Breakdown</h3>
+                <div className="h-48 w-48">
+                  <Doughnut data={doughnutData} options={{ maintainAspectRatio: false }} />
+                </div>
+              </div>
             </div>
           </div>
+        )}
 
-          {/* Recent Orders Table with AWB Input */}
-          <div className="rounded-2xl border border-[#262626] bg-[#141414] p-6">
-            <h2 className="text-lg font-bold text-white mb-4">Recent Orders</h2>
+        {/* SECTION E: SHOPIFY PRODUCTS CATALOG */}
+        {activeTab === 'products' && (
+          <div className="mt-8">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h2 className="text-xl font-black text-white">Products Catalog</h2>
+                <p className="text-xs text-gray-400 mt-1">Manage product pricing, stock count, image URLs, and SEO metadata.</p>
+              </div>
+              <button
+                onClick={() => openProductModal()}
+                className="flex items-center gap-1.5 rounded-xl bg-[#16a34a] px-4 py-2.5 text-xs font-bold text-white shadow-lg hover:bg-[#15803d]"
+              >
+                <Plus className="h-4 w-4" /> Add Product
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {products.map((prod) => (
+                <div key={prod.id} className="rounded-2xl border border-[#262626] bg-[#141414] overflow-hidden flex flex-col justify-between">
+                  <div>
+                    <div className="h-48 w-full bg-[#0a0a0a] relative flex items-center justify-center border-b border-[#262626]">
+                      {prod.imageUrl ? (
+                        <img src={prod.imageUrl} alt={prod.name} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="text-center text-gray-600">
+                          <ImageIcon className="h-10 w-10 mx-auto mb-1" />
+                          <span className="text-[10px]">No image link set</span>
+                        </div>
+                      )}
+                      <span className={`absolute top-3 right-3 px-2.5 py-1 rounded-full text-[10px] font-bold ${prod.stock > 10 ? 'bg-green-950 text-green-400 border border-green-800' : 'bg-red-950 text-red-400 border border-red-800'}`}>
+                        {prod.stock} in stock
+                      </span>
+                    </div>
+
+                    <div className="p-5">
+                      {prod.sku && (
+                        <span className="inline-flex items-center gap-1 text-[10px] bg-[#262626] text-gray-300 px-2 py-0.5 rounded font-mono mb-2">
+                          <Tag className="h-3 w-3 text-[#22c55e]" /> {prod.sku}
+                        </span>
+                      )}
+                      <h3 className="font-bold text-white text-base truncate">{prod.name}</h3>
+                      <p className="mt-2 text-2xl font-black text-[#22c55e]">
+                        ₹{(prod.price / 100).toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-5 pt-0 border-t border-[#262626] mt-4 flex items-center justify-between">
+                    <span className="text-[11px] text-gray-500 truncate max-w-[180px]">{prod.seoTitle || 'No SEO title'}</span>
+                    <button
+                      onClick={() => openProductModal(prod)}
+                      className="flex items-center gap-1 rounded-xl bg-blue-950/50 border border-blue-800/40 text-blue-400 px-3 py-1.5 text-xs font-bold hover:bg-blue-900/60"
+                    >
+                      <Edit2 className="h-3.5 w-3.5" /> Edit
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* SECTION F: ORDERS, PAYMENT STATUS & SAVED AWB MANAGEMENT */}
+        {activeTab === 'orders' && (
+          <div className="mt-8 rounded-2xl border border-[#262626] bg-[#141414] p-6">
+            <h2 className="text-lg font-bold text-white mb-4">Orders & Saved AWB Tracking</h2>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs text-gray-300">
                 <thead className="border-b border-[#262626] text-gray-400 uppercase">
                   <tr>
-                    <th className="py-3 px-2">Customer</th>
-                    <th className="py-3 px-2">Amount</th>
-                    <th className="py-3 px-2">Status</th>
-                    <th className="py-3 px-2">AWB Number</th>
+                    <th className="py-3 px-3">Customer</th>
+                    <th className="py-3 px-3">Amount</th>
+                    <th className="py-3 px-3">Payment Status</th>
+                    <th className="py-3 px-3">Saved AWB & Tracking Link</th>
+                    <th className="py-3 px-3 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#262626]">
-                  {stats && stats.recentOrders.length > 0 ? (
-                    stats.recentOrders.map((order) => (
+                  {orders.map((order) => {
+                    const isEditingThis = editingAwbId === order.id;
+
+                    return (
                       <tr key={order.id} className="hover:bg-[#1a1a1a]">
-                        <td className="py-3 px-2 font-semibold text-white">
+                        <td className="py-4 px-3 font-semibold text-white">
                           {order.customerName}
+                          <span className="block text-[10px] text-gray-500">{order.customerEmail}</span>
                         </td>
-                        <td className="py-3 px-2">
-                          ₹{(order.amount / 100).toFixed(2)}
-                        </td>
-                        <td className="py-3 px-2">
-                          <span
-                            className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                              order.status === "PAID"
-                                ? "bg-green-950 text-green-400 border border-green-800"
-                                : "bg-amber-950 text-amber-400 border border-amber-800"
-                            }`}
-                          >
-                            {order.status}
-                          </span>
-                        </td>
-                        <td className="py-3 px-2">
+
+                        <td className="py-4 px-3 font-bold text-white">₹{(order.amount / 100).toFixed(2)}</td>
+
+                        {/* Status Toggle & Confirmation */}
+                        <td className="py-4 px-3">
                           <div className="flex items-center gap-2">
-                            <input
-                              type="text"
-                              placeholder="Enter AWB #"
-                              defaultValue={order.awbNumber || ""}
-                              onBlur={(e) => {
-                                if (
-                                  e.target.value !== (order.awbNumber || "")
-                                ) {
-                                  handleSaveAwb(order.id, e.target.value);
-                                }
-                              }}
-                              className="w-32 rounded-lg border border-[#262626] bg-[#0a0a0a] px-2 py-1 text-xs text-white focus:border-[#22c55e] focus:outline-none"
-                            />
-                            {updatingAwb === order.id && (
-                              <span className="text-[10px] text-[#22c55e] animate-pulse">
-                                Saving...
-                              </span>
+                            <span
+                              className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                                order.status === 'PAID'
+                                  ? 'bg-green-950 text-green-400 border border-green-800'
+                                  : order.status === 'CANCELLED'
+                                  ? 'bg-red-950 text-red-400 border border-red-800'
+                                  : 'bg-amber-950 text-amber-400 border border-amber-800'
+                              }`}
+                            >
+                              {order.status}
+                            </span>
+
+                            {order.status === 'PENDING' && (
+                              <div className="flex gap-1">
+                                <button
+                                  onClick={() => handleUpdateStatus(order.id, 'PAID')}
+                                  className="p-1 rounded bg-green-900/50 text-green-400 hover:bg-green-800"
+                                  title="Confirm Payment"
+                                >
+                                  <CheckCircle className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleUpdateStatus(order.id, 'CANCELLED')}
+                                  className="p-1 rounded bg-red-900/50 text-red-400 hover:bg-red-800"
+                                  title="Cancel Order"
+                                >
+                                  <XCircle className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
                             )}
                           </div>
                         </td>
+
+                        {/* Saved AWB & Tracking Link Display with Edit Control */}
+                        <td className="py-4 px-3">
+                          {isEditingThis ? (
+                            <div className="flex flex-col sm:flex-row items-center gap-2">
+                              <input
+                                type="text"
+                                placeholder="AWB Number"
+                                value={awbInputs[order.id]?.awbNumber || ''}
+                                onChange={(e) =>
+                                  setAwbInputs({
+                                    ...awbInputs,
+                                    [order.id]: { ...awbInputs[order.id], awbNumber: e.target.value },
+                                  })
+                                }
+                                className="w-32 rounded-lg border border-[#262626] bg-[#0a0a0a] px-2.5 py-1.5 text-xs text-white focus:border-[#22c55e] focus:outline-none"
+                              />
+                              <input
+                                type="url"
+                                placeholder="Courier Link"
+                                value={awbInputs[order.id]?.courierUrl || ''}
+                                onChange={(e) =>
+                                  setAwbInputs({
+                                    ...awbInputs,
+                                    [order.id]: { ...awbInputs[order.id], courierUrl: e.target.value },
+                                  })
+                                }
+                                className="w-40 rounded-lg border border-[#262626] bg-[#0a0a0a] px-2.5 py-1.5 text-xs text-white focus:border-[#22c55e] focus:outline-none"
+                              />
+                              <button
+                                onClick={() => handleSaveAwbAndLink(order.id)}
+                                className="flex items-center gap-1 rounded-lg bg-[#16a34a] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#15803d]"
+                              >
+                                <Save className="h-3.5 w-3.5" /> Save
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-3">
+                              {order.awbNumber ? (
+                                <div className="flex items-center gap-2">
+                                  <span className="font-mono text-xs text-[#22c55e] font-bold bg-green-950/40 px-2.5 py-1 rounded-md border border-green-800/40">
+                                    {order.awbNumber}
+                                  </span>
+                                  <a
+                                    href={order.courierUrl || `https://www.delhivery.com/track/package/${order.awbNumber}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="flex items-center gap-1 text-xs text-blue-400 hover:underline"
+                                  >
+                                    Track <ExternalLink className="h-3 w-3" />
+                                  </a>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-gray-500 italic">No AWB assigned</span>
+                              )}
+                              <button
+                                onClick={() => setEditingAwbId(order.id)}
+                                className="text-xs text-gray-400 hover:text-white underline ml-2 font-semibold"
+                              >
+                                {order.awbNumber ? 'Edit' : '+ Add AWB'}
+                              </button>
+                            </div>
+                          )}
+                        </td>
+
+                        <td className="py-4 px-3 text-right">
+                          <button
+                            onClick={() => handleDeleteOrder(order.id)}
+                            className="rounded-lg bg-red-950/40 border border-red-800/50 p-2 text-red-400 hover:bg-red-900/60"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* SECTION G: CUSTOMERS TAB (WITH SEARCH & PAGINATION) */}
+        {activeTab === 'users' && (
+          <div className="mt-8 rounded-2xl border border-[#262626] bg-[#141414] p-6">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
+              <h2 className="text-lg font-bold text-white">Registered Accounts ({filteredUsers.length})</h2>
+
+              <div className="relative w-full sm:w-64">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-500" />
+                <input
+                  type="text"
+                  placeholder="Search name, email, phone..."
+                  className="w-full rounded-xl border border-[#262626] bg-[#0a0a0a] pl-9 pr-3 py-2 text-xs text-white focus:border-[#22c55e] focus:outline-none"
+                  value={userSearchQuery}
+                  onChange={(e) => {
+                    setUserSearchQuery(e.target.value);
+                    setUserPage(1);
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs text-gray-300">
+                <thead className="border-b border-[#262626] text-gray-400 uppercase">
+                  <tr>
+                    <th className="py-3 px-3">Name</th>
+                    <th className="py-3 px-3">Email</th>
+                    <th className="py-3 px-3">Phone</th>
+                    <th className="py-3 px-3">Joined Date</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#262626]">
+                  {paginatedUsers.length > 0 ? (
+                    paginatedUsers.map((u) => (
+                      <tr key={u.id} className="hover:bg-[#1a1a1a]">
+                        <td className="py-3 px-3 font-semibold text-white">{u.name}</td>
+                        <td className="py-3 px-3 text-gray-400">{u.email}</td>
+                        <td className="py-3 px-3 text-gray-400">{u.phone}</td>
+                        <td className="py-3 px-3 text-gray-500">{new Date(u.createdAt).toLocaleDateString('en-IN')}</td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td
-                        colSpan={4}
-                        className="py-6 text-center text-gray-500"
-                      >
-                        No orders found.
+                      <td colSpan={4} className="py-6 text-center text-gray-500">
+                        No customers match your search query.
                       </td>
                     </tr>
                   )}
                 </tbody>
               </table>
             </div>
+
+            {filteredUsers.length > USERS_PER_PAGE && (
+              <div className="flex items-center justify-between border-t border-[#262626] pt-4 mt-4 text-xs">
+                <span className="text-gray-500">
+                  Showing {(userPage - 1) * USERS_PER_PAGE + 1} to {Math.min(userPage * USERS_PER_PAGE, filteredUsers.length)} of {filteredUsers.length}
+                </span>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setUserPage((p) => Math.max(p - 1, 1))}
+                    disabled={userPage === 1}
+                    className="px-3 py-1.5 rounded-lg border border-[#262626] bg-[#0a0a0a] text-white disabled:opacity-40"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    onClick={() => setUserPage((p) => Math.min(p + 1, Math.ceil(filteredUsers.length / USERS_PER_PAGE)))}
+                    disabled={userPage >= Math.ceil(filteredUsers.length / USERS_PER_PAGE)}
+                    className="px-3 py-1.5 rounded-lg border border-[#262626] bg-[#0a0a0a] text-white disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* SECTION H: SHOPIFY PRODUCT DRAWER / MODAL */}
+      {productModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-md">
+          <div className="w-full max-w-2xl rounded-3xl border border-[#262626] bg-[#141414] p-8 text-white max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-black">{editingProduct ? 'Edit Product' : 'Add New Product'}</h2>
+
+            <form onSubmit={handleSaveProduct} className="mt-6 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-400 uppercase">Product Title</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. BrainBowl Classic Roasted Makhana (250g)"
+                  className="mt-1 w-full rounded-xl border border-[#262626] bg-[#0a0a0a] p-3 text-xs text-white focus:border-[#22c55e] focus:outline-none"
+                  value={productForm.name}
+                  onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-400 uppercase">Product Image URL Link</label>
+                <input
+                  type="url"
+                  placeholder="https://images.unsplash.com/photo-1599490659213..."
+                  className="mt-1 w-full rounded-xl border border-[#262626] bg-[#0a0a0a] p-3 text-xs text-white focus:border-[#22c55e] focus:outline-none"
+                  value={productForm.imageUrl}
+                  onChange={(e) => setProductForm({ ...productForm, imageUrl: e.target.value })}
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 uppercase">Price (₹)</label>
+                  <input
+                    type="number"
+                    required
+                    placeholder="299"
+                    className="mt-1 w-full rounded-xl border border-[#262626] bg-[#0a0a0a] p-3 text-xs text-white focus:border-[#22c55e] focus:outline-none"
+                    value={productForm.price}
+                    onChange={(e) => setProductForm({ ...productForm, price: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 uppercase">Stock Inventory</label>
+                  <input
+                    type="number"
+                    required
+                    placeholder="100"
+                    className="mt-1 w-full rounded-xl border border-[#262626] bg-[#0a0a0a] p-3 text-xs text-white focus:border-[#22c55e] focus:outline-none"
+                    value={productForm.stock}
+                    onChange={(e) => setProductForm({ ...productForm, stock: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 uppercase">SKU Code</label>
+                  <input
+                    type="text"
+                    placeholder="BB-MAK-001"
+                    className="mt-1 w-full rounded-xl border border-[#262626] bg-[#0a0a0a] p-3 text-xs text-white focus:border-[#22c55e] focus:outline-none"
+                    value={productForm.sku}
+                    onChange={(e) => setProductForm({ ...productForm, sku: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-400 uppercase">SEO Page Title</label>
+                <input
+                  type="text"
+                  placeholder="Organic Roasted Makhana | BrainBowl Store"
+                  className="mt-1 w-full rounded-xl border border-[#262626] bg-[#0a0a0a] p-3 text-xs text-white focus:border-[#22c55e] focus:outline-none"
+                  value={productForm.seoTitle}
+                  onChange={(e) => setProductForm({ ...productForm, seoTitle: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-400 uppercase">SEO Meta Description</label>
+                <textarea
+                  rows={2}
+                  placeholder="High-protein, low-calorie roasted superfood snack..."
+                  className="mt-1 w-full rounded-xl border border-[#262626] bg-[#0a0a0a] p-3 text-xs text-white focus:border-[#22c55e] focus:outline-none resize-none"
+                  value={productForm.seoDescription}
+                  onChange={(e) => setProductForm({ ...productForm, seoDescription: e.target.value })}
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-[#262626]">
+                <button
+                  type="button"
+                  onClick={() => setProductModalOpen(false)}
+                  className="rounded-xl border border-[#262626] bg-[#0a0a0a] px-4 py-2.5 text-xs text-gray-400"
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="rounded-xl bg-[#16a34a] px-6 py-2.5 text-xs font-bold text-white shadow-lg hover:bg-[#15803d]">
+                  Save Product
+                </button>
+              </div>
+            </form>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

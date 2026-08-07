@@ -17,30 +17,35 @@ enum OrderStatus {
 }
 
 model Product {
-  id          String   @id @default(uuid())
-  name        String
-  tagline     String?  // <-- Ensure this field exists
-  description String?
-  price       Int
-  stock       Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String   @id @default(uuid())
+  name            String
+  sku             String?  @unique
+  price           Int      // in paise (e.g. 29900 = ₹299.00)
+  stock           Int      @default(0)
+  imageUrl        String?  // <-- Added Image Link URL
+  description     String?
+  seoTitle        String?
+  seoDescription  String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  orders      Order[]
+  orders          Order[]
 }
 
 model Order {
   id                String   @id @default(uuid())
   receiptId         String   @unique
-  amount            Int
-  status            String   // "PAID", "PENDING"
+  amount            Int      // Base product price
+  shippingCost      Int      @default(0) // <-- Added Shipping Cost in paise (0 = Free)
+  status            String   // "PAID", "PENDING", "CANCELLED"
   customerName      String
   customerEmail     String
   customerPhone     String
   shippingAddress   String
-  razorpayOrderId   String?  @unique // <-- Add @unique here
+  razorpayOrderId   String?  @unique
   razorpayPaymentId String?
   awbNumber         String?
+  courierUrl        String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -73,4 +78,11 @@ model Otp {
   type      String // "REGISTER" or "FORGOT_PASSWORD"
   expiresAt DateTime
   createdAt DateTime @default(now())
+}
+
+model StoreSetting {
+  id                  String   @id @default("global")
+  freeShippingMinAmount Int    @default(99900) // Default ₹999 in paise
+  standardShippingFee Int      @default(9900)  // Default ₹99 in paise
+  updatedAt           DateTime @updatedAt
 }

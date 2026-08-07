@@ -100,7 +100,7 @@ const handleBuyNow = () => {
       <ProblemSolution />
       <HealthBenefits />
       <NutritionFacts />
-      <FlavorsShowcase />
+      {/* <FlavorsShowcase /> */}
       <SourcingStory />
       <ComparisonTable />
       <HowItIsMade />

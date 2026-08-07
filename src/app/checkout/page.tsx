@@ -14,6 +14,8 @@ import {
   RefreshCw,
   Building2,
   Globe,
+  Plus,
+  Minus,
 } from "lucide-react";
 
 interface UserProfile {
@@ -29,6 +31,21 @@ export default function CheckoutPage() {
   const [fetchingPincode, setFetchingPincode] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(null);
 
+  // Single Item Base Price in Paise (₹299 = 29900 paise)
+  const unitPrice = 29900;
+
+  // Quantity State (1 to Many Items)
+  const [quantity, setQuantity] = useState(1);
+
+  // Calculated Product Subtotal based on Quantity
+  const productSubtotal = unitPrice * quantity;
+
+  // Dynamic Shipping Settings State (Fetched from Admin API)
+  const [shippingRules, setShippingRules] = useState({
+    freeShippingMinAmount: 99900, // Default ₹999 threshold in paise
+    standardShippingFee: 9900,    // Default ₹99 fee in paise
+  });
+
   // Structured Address State
   const [formData, setFormData] = useState({
     name: "",
@@ -40,10 +57,21 @@ export default function CheckoutPage() {
     state: "",
   });
 
-  // Fetch logged-in user profile from PostgreSQL
+  // Fetch logged-in user profile & store shipping settings
   useEffect(() => {
     async function initCheckout() {
       try {
+        // 1. Fetch Admin Shipping Settings
+        const settingsRes = await fetch("/api/admin/settings");
+        const settingsData = await settingsRes.json();
+        if (settingsData.success && settingsData.data) {
+          setShippingRules({
+            freeShippingMinAmount: settingsData.data.freeShippingMinAmount,
+            standardShippingFee: settingsData.data.standardShippingFee,
+          });
+        }
+
+        // 2. Fetch User Profile
         const userRes = await fetch("/api/auth/me");
         const userData = await userRes.json();
         if (userData.success && userData.user) {
@@ -63,6 +91,20 @@ export default function CheckoutPage() {
     }
     initCheckout();
   }, []);
+
+  // Calculate Dynamic Shipping Charges
+  const isFreeShipping = productSubtotal >= shippingRules.freeShippingMinAmount;
+  const shippingFee = isFreeShipping ? 0 : shippingRules.standardShippingFee;
+  const grandTotal = productSubtotal + shippingFee;
+
+  // Quantity Change Handlers
+  const handleIncreaseQuantity = () => {
+    setQuantity((prev) => prev + 1);
+  };
+
+  const handleDecreaseQuantity = () => {
+    setQuantity((prev) => (prev > 1 ? prev - 1 : 1));
+  };
 
   // Auto-Match Pincode to District & State via India Post API
   const handlePincodeChange = async (
@@ -122,7 +164,9 @@ export default function CheckoutPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          amount: 29900, // ₹299.00
+          amount: grandTotal,
+          quantity: quantity,
+          shippingCost: shippingFee,
           customerName: formData.name,
           customerEmail: formData.email,
           customerPhone: formData.phone,
@@ -136,11 +180,11 @@ export default function CheckoutPage() {
       }
 
       const options = {
-        key: orderData.key || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID, // Uses key from backend response first
+        key: orderData.key || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
         amount: orderData.amount,
         currency: "INR",
         name: "BrainBowl Superfood",
-        description: "BrainBowl Organic Roasted Makhana Pack",
+        description: `BrainBowl Organic Roasted Makhana Pack (${quantity}x)`,
         order_id: orderData.razorpayOrderId,
         prefill: {
           name: formData.name,
@@ -271,7 +315,7 @@ export default function CheckoutPage() {
                       className="w-full bg-transparent text-sm text-white focus:outline-none"
                       value={formData.phone}
                       onChange={(e) =>
-                        setFormData({ ...formData, phone: e.target.value })
+                        setFormData({ ...formData, phone: e.target.value.replace(/\D/g, "") })
                       }
                     />
                   </div>
@@ -370,7 +414,9 @@ export default function CheckoutPage() {
                 className="mt-6 w-full flex items-center justify-center gap-2 rounded-xl bg-[#16a34a] py-4 text-sm font-bold text-white shadow-lg shadow-green-600/20 hover:bg-[#15803d] transition disabled:opacity-50"
               >
                 <CreditCard className="h-4 w-4" />
-                {submitting ? "Processing Payment..." : "Pay ₹299.00 Securely"}
+                {submitting
+                  ? "Processing Payment..."
+                  : `Pay ₹${(grandTotal / 100).toFixed(2)} Securely`}
               </button>
             </form>
           </div>
@@ -388,27 +434,63 @@ export default function CheckoutPage() {
                     BrainBowl Roasted Makhana
                   </p>
                   <p className="text-xs text-gray-400 mt-0.5">
-                    Quantity: 1 Pack
+                    Unit Price: ₹{(unitPrice / 100).toFixed(2)}
                   </p>
                 </div>
-                <span className="text-sm font-bold text-white">₹299.00</span>
+
+                {/* Quantity Controls (+ / -) */}
+                <div className="flex items-center gap-2 bg-[#0a0a0a] border border-[#262626] rounded-xl px-2 py-1">
+                  <button
+                    type="button"
+                    onClick={handleDecreaseQuantity}
+                    className="p-1 text-gray-400 hover:text-white transition rounded-md"
+                    title="Decrease Quantity"
+                  >
+                    <Minus className="h-3.5 w-3.5" />
+                  </button>
+                  <span className="text-xs font-bold w-4 text-center">
+                    {quantity}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleIncreaseQuantity}
+                    className="p-1 text-gray-400 hover:text-white transition rounded-md"
+                    title="Increase Quantity"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-2 py-4 text-xs text-gray-400 border-b border-[#262626]">
                 <div className="flex justify-between">
-                  <span>Subtotal</span>
-                  <span className="text-white font-medium">₹299.00</span>
+                  <span>Subtotal ({quantity} {quantity === 1 ? "item" : "items"})</span>
+                  <span className="text-white font-medium">
+                    ₹{(productSubtotal / 100).toFixed(2)}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span>Express Shipping</span>
-                  <span className="text-[#22c55e] font-bold">FREE</span>
+                  {isFreeShipping ? (
+                    <span className="text-[#22c55e] font-bold">FREE</span>
+                  ) : (
+                    <span className="text-white font-semibold">
+                      +₹{(shippingFee / 100).toFixed(2)}
+                    </span>
+                  )}
                 </div>
+
+                {!isFreeShipping && (
+                  <p className="mt-2 text-[10px] text-amber-400 bg-amber-950/30 border border-amber-800/40 p-2 rounded-lg">
+                    💡 Add items worth ₹{((shippingRules.freeShippingMinAmount - productSubtotal) / 100).toFixed(0)} more for FREE shipping!
+                  </p>
+                )}
               </div>
 
               <div className="flex items-center justify-between pt-4">
                 <span className="text-sm font-bold">Total Amount</span>
                 <span className="text-xl font-black text-[#22c55e]">
-                  ₹299.00
+                  ₹{(grandTotal / 100).toFixed(2)}
                 </span>
               </div>
             </div>
