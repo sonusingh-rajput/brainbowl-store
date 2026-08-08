@@ -70,6 +70,7 @@ export default function CheckoutPage() {
             standardShippingFee: settingsData.data.standardShippingFee,
           });
         }
+        
 
         // 2. Fetch User Profile
         const userRes = await fetch("/api/auth/me");
