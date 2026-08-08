@@ -104,18 +104,18 @@ const handleBuyNow = () => {
       <SourcingStory />
       <ComparisonTable />
       <HowItIsMade />
-      <RecipeIdeas />
+      {/* <RecipeIdeas /> */}
       <CustomerReviews />
       <ExpertEndorsement />
       <Certifications />
-      <ValueBundle onBuyNow={handleBuyNow} />
+      {/* <ValueBundle onBuyNow={handleBuyNow} /> */}
       <FAQSection />
       <Guarantees />
-      <Newsletter />
+      {/* <Newsletter /> */}
       <Footer />
 
       {/* Floating CTA Button */}
-      <StickyCTA onBuyNow={handleBuyNow} />
+      {/* <StickyCTA onBuyNow={handleBuyNow} /> */}
 
       {/* Auth Modal for Login / Registration */}
       <AuthModal

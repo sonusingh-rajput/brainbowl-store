@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Inter, Plus_Jakarta_Sans } from 'next/font/google';
+import { Inter, Playfair_Display } from 'next/font/google';
 import { Toaster } from 'react-hot-toast';
 import './globals.css';
 
@@ -8,35 +8,37 @@ const inter = Inter({
   variable: '--font-sans',
 });
 
-const plusJakarta = Plus_Jakarta_Sans({
+const playfair = Playfair_Display({
   subsets: ['latin'],
   variable: '--font-heading',
 });
 
 export const metadata: Metadata = {
-  title: 'BrainBowl — Premium Organic Roasted Superfood Makhana',
+  title: 'BrainBowl — Premium Superfood Makhana Wellness Drink',
   description:
-    'Handpicked Phool Makhana roasted in cold-pressed olive oil. 100% organic, high protein, low GI, and zero cholesterol. Order online for fast delivery across India.',
+    'Nourish your brain and body with 100% plant-based, gluten-free superfood Makhana. Packed with mental focus nutrients, immunity support, and zero added sugar.',
   keywords: [
     'Makhana',
     'Fox Nuts',
-    'Healthy Snacks',
+    'Wellness Drink',
     'BrainBowl',
-    'Organic Superfood',
-    'Protein Snack',
+    'Plant Based Nutrition',
+    'Superfood Snack',
+    'Gluten Free',
+    'No Added Sugar',
   ],
   openGraph: {
-    title: 'BrainBowl — Premium Organic Roasted Superfood Makhana',
+    title: 'BrainBowl — Premium Superfood Makhana Wellness Drink',
     description:
-      'Nourish your brain and body with 100% plant-based, gluten-free superfood snacks.',
+      'Nourish your brain and body with 100% plant-based, clean superfood nutrition.',
     url: 'https://www.brainbowl.in',
     siteName: 'BrainBowl',
     images: [
       {
-        url: 'https://images.unsplash.com/photo-1599490659213-e2b9527bd087?auto=format&fit=crop&w=1200&h=630&q=80',
+        url: '/product_image.jpeg',
         width: 1200,
         height: 630,
-        alt: 'BrainBowl Makhana Pack',
+        alt: 'BrainBowl Superfood Makhana',
       },
     ],
     locale: 'en_IN',
@@ -44,8 +46,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'BrainBowl — Premium Organic Roasted Superfood Makhana',
-    description: 'Nourish your brain and body with clean plant protein.',
+    title: 'BrainBowl — Premium Superfood Makhana Wellness Drink',
+    description: 'Nourish your brain and body with clean plant protein and zero added sugar.',
   },
 };
 
@@ -55,15 +57,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${inter.variable} ${plusJakarta.variable}`}>
-      <body className="bg-[#0a0a0a] text-white font-sans antialiased selection:bg-[#22c55e] selection:text-black">
+    <html lang="en" className={`${inter.variable} ${playfair.variable}`}>
+      <body className="bg-[#0b1711] text-[#f4efe6] font-sans antialiased selection:bg-[#d4af37] selection:text-[#0b1711]">
         <Toaster
           position="top-right"
           toastOptions={{
             style: {
-              background: '#141414',
-              color: '#ffffff',
-              border: '1px solid #262626',
+              background: '#11241a',
+              color: '#f4efe6',
+              border: '1px solid #2d4739',
               borderRadius: '0.75rem',
               fontSize: '0.875rem',
             },

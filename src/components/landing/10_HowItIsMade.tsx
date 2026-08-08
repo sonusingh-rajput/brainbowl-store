@@ -193,20 +193,22 @@ export default function HowItIsMade() {
                   isEven ? "lg:flex-row-reverse" : ""
                 }`}
               >
-                {/* Step Real Image Container */}
+                {/* Optimized Next.js Image Container */}
                 <div
                   className={`lg:col-span-5 relative overflow-hidden rounded-2xl border border-[#2d4739] h-56 sm:h-64 w-full group ${
                     isEven ? "lg:order-2" : "lg:order-1"
                   }`}
                 >
-                  <img
+                  <Image
                     src={item.image}
                     alt={item.title}
-                    className="h-full w-full object-cover group-hover:scale-105 transition duration-500 brightness-90 group-hover:brightness-100"
+                    fill
+                    sizes="(max-width: 1024px) 100vw, 40vw"
+                    className="object-cover group-hover:scale-105 transition duration-500 brightness-90 group-hover:brightness-100"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-[#0b1711] via-transparent to-transparent opacity-80" />
                   
-                  <div className="absolute top-3 left-3 bg-[#0b1711]/90 border border-[#d4af37] text-[#d4af37] rounded-xl px-3 py-1 font-serif text-xs font-bold backdrop-blur-sm">
+                  <div className="absolute top-3 left-3 bg-[#0b1711]/90 border border-[#d4af37] text-[#d4af37] rounded-xl px-3 py-1 font-serif text-xs font-bold backdrop-blur-sm z-10">
                     STEP {item.step}
                   </div>
                 </div>
