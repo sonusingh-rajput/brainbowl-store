@@ -70,19 +70,19 @@ export default function CheckoutPage() {
             standardShippingFee: settingsData.data.standardShippingFee,
           });
         }
-        
+
 
         // 2. Fetch User Profile
         const userRes = await fetch("/api/auth/me");
         const userData = await userRes.json();
         if (userData.success && userData.user) {
-          setUser(userData.user);
-          setFormData((prev) => ({
-            ...prev,
-            name: userData.user.name || "",
-            email: userData.user.email || "",
-            phone: userData.user.phone || "",
-          }));
+        setUser(userData.user);
+        setFormData((prev) => ({
+          ...prev,
+          name: userData.user.name || "",
+          email: userData.user.email || "",
+          phone: userData.user.phone || "",
+        }));
         }
       } catch (err) {
         toast.error("Error loading session details");
@@ -253,7 +253,7 @@ export default function CheckoutPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
           <div className="lg:col-span-7 rounded-3xl border border-[#262626] bg-[#141414] p-8">
-            <h1 className="text-2xl font-black">Shipping & Payment</h1>
+              <h1 className="text-2xl font-black">Shipping & Payment</h1>
             <p className="text-xs text-gray-400 mt-1">
               {user
                 ? "✨ Profile auto-filled from database"

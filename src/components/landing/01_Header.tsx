@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import Image from "next/image";
-import { User, LogOut } from "lucide-react";
+import Link from "next/link";
+import { User, LogOut, Menu, X } from "lucide-react";
 
 interface HeaderProps {
   user: { name: string; email: string } | null;
@@ -10,18 +12,28 @@ interface HeaderProps {
 }
 
 export default function Header({ user, onOpenAuth, onLogout }: HeaderProps) {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const navLinks = [
+    { name: "Benefits", href: "#benefits" },
+    { name: "Our Sourcing", href: "#sourcing" },
+    { name: "How It's Made", href: "#how-it-is-made" },
+    { name: "Reviews", href: "#reviews" },
+    { name: "FAQ", href: "#faq" },
+  ];
+
   return (
     <header className="sticky top-0 z-40 w-full border-b border-[#2d4739] bg-[#11241a]/90 backdrop-blur-md">
       <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 sm:px-8 py-3">
         
         {/* LEFT: Logo Section */}
-        <a href="#" className="flex items-center gap-2.5 sm:gap-3 group min-w-0 shrink-0">
-          <div className="relative h-16 w-16 sm:h-10 sm:w-10 shrink-0 overflow-hidden rounded-full border border-[#d4af37]/40 bg-[#0b1711] p-1 transition group-hover:border-[#d4af37]">
+        <Link href="/" className="flex items-center gap-2.5 sm:gap-3 group min-w-0 shrink-0">
+          <div className="relative h-10 w-10 sm:h-11 sm:w-11 shrink-0 overflow-hidden rounded-full border border-[#d4af37]/40 bg-[#0b1711] p-1 transition group-hover:border-[#d4af37]">
             <Image
               src="/Brain Bowl Logo.png"
               alt="BrainBowl Logo"
-              width={40}
-              height={40}
+              width={44}
+              height={44}
               className="h-full w-full object-contain"
               priority
             />
@@ -34,29 +46,26 @@ export default function Header({ user, onOpenAuth, onLogout }: HeaderProps) {
               Nourish Your Brain & Body
             </span>
           </div>
-        </a>
+        </Link>
 
-        {/* CENTER: Navigation Links */}
-        <nav className="hidden md:flex items-center justify-center gap-6 text-sm font-medium text-[#c2d1c7]">
-          <a href="#benefits" className="transition hover:text-[#d4af37]">
-            Benefits
-          </a>
-          <a href="#flavors" className="transition hover:text-[#d4af37]">
-            Flavors
-          </a>
-          <a href="#reviews" className="transition hover:text-[#d4af37]">
-            Reviews
-          </a>
-          <a href="#faq" className="transition hover:text-[#d4af37]">
-            FAQ
-          </a>
+        {/* CENTER: Navigation Links (Matching Active Sections) */}
+        <nav className="hidden lg:flex items-center justify-center gap-6 text-sm font-medium text-[#c2d1c7]">
+          {navLinks.map((link) => (
+            <a
+              key={link.name}
+              href={link.href}
+              className="transition hover:text-[#d4af37]"
+            >
+              {link.name}
+            </a>
+          ))}
         </nav>
 
         {/* RIGHT: User / Auth Controls */}
         <div className="flex items-center justify-end gap-2 sm:gap-3 shrink-0">
           {user ? (
             <div className="flex items-center gap-2 sm:gap-3">
-              <a
+              <Link
                 href="/dashboard"
                 className="flex items-center gap-2 rounded-xl border border-[#2d4739] bg-[#0b1711] px-2.5 sm:px-3 py-1.5 transition hover:border-[#d4af37]"
               >
@@ -66,7 +75,7 @@ export default function Header({ user, onOpenAuth, onLogout }: HeaderProps) {
                 <span className="text-xs font-semibold text-[#f4efe6] max-w-[70px] sm:max-w-none truncate">
                   {user.name}
                 </span>
-              </a>
+              </Link>
 
               <button
                 onClick={onLogout}
@@ -94,9 +103,49 @@ export default function Header({ user, onOpenAuth, onLogout }: HeaderProps) {
               </button>
             </>
           )}
+
+          {/* Mobile Menu Toggle Button */}
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="flex lg:hidden items-center justify-center h-9 w-9 rounded-lg border border-[#2d4739] bg-[#0b1711] text-[#d4af37]"
+            aria-label="Toggle menu"
+          >
+            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
         </div>
 
       </div>
+
+      {/* MOBILE MENU DROPDOWN */}
+      {mobileMenuOpen && (
+        <div className="lg:hidden border-t border-[#2d4739] bg-[#0b1711] px-6 py-4 space-y-3">
+          <div className="flex flex-col space-y-2 text-sm font-medium text-[#c2d1c7]">
+            {navLinks.map((link) => (
+              <a
+                key={link.name}
+                href={link.href}
+                onClick={() => setMobileMenuOpen(false)}
+                className="py-1.5 transition hover:text-[#d4af37]"
+              >
+                {link.name}
+              </a>
+            ))}
+          </div>
+          {!user && (
+            <div className="pt-2 border-t border-[#2d4739]/60 sm:hidden flex flex-col gap-2">
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  onOpenAuth("register");
+                }}
+                className="w-full rounded-lg bg-[#d4af37] py-2 text-center text-xs font-bold text-[#0b1711]"
+              >
+                Register Account
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </header>
   );
 }
