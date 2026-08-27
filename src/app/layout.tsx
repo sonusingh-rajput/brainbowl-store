@@ -14,6 +14,7 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'https://www.brainbowl.in'),
   title: 'BrainBowl — Premium Superfood Makhana Wellness Drink',
   description:
     'Nourish your brain and body with 100% plant-based, gluten-free superfood Makhana. Packed with mental focus nutrients, immunity support, and zero added sugar.',

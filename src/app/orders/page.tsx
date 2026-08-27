@@ -87,7 +87,7 @@ export default function OrderLookupPage() {
       order.status !== 'RETURN_REQUESTED' &&
       order.status !== 'RETURNED'
     ) {
-      toast.error('Tax invoice is only generated for PAID orders.');
+      toast.error('Tax invoice is available for Paid, Shipped, or Delivered orders.');
       return;
     }
 

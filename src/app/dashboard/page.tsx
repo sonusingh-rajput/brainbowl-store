@@ -109,7 +109,7 @@ export default function UserDashboard() {
 
   const handleOpenInvoice = (order: OrderItem) => {
     if (order.status !== 'PAID' && order.status !== 'SHIPPED' && order.status !== 'DELIVERED' && order.status !== 'RETURN_REQUESTED' && order.status !== 'RETURNED') {
-      toast.error('Tax invoice is only generated for PAID orders.');
+      toast.error('Tax invoice is available for Paid, Shipped, or Delivered orders.');
       return;
     }
 

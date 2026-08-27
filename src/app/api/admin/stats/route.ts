@@ -14,7 +14,11 @@ export async function GET() {
     const [totalUsers, totalOrders, paidOrders, recentUsers, recentOrders] = await Promise.all([
       prisma.user.count(),
       prisma.order.count(),
-      prisma.order.findMany({ where: { status: 'PAID' } }),
+      prisma.order.findMany({
+        where: {
+          status: { in: ['PAID', 'SHIPPED', 'DELIVERED', 'RETURN_REQUESTED', 'RETURNED'] },
+        },
+      }),
       prisma.user.findMany({
         take: 10,
         orderBy: { createdAt: 'desc' },

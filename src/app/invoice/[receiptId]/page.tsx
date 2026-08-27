@@ -39,8 +39,9 @@ export default function InvoicePage({
         const data = await res.json();
         if (data.success && data.data && data.data.length > 0) {
           const fetchedOrder = data.data[0];
-          if (fetchedOrder.status !== 'PAID') {
-            setError(`Tax invoices are only generated for PAID orders. Current order status: ${fetchedOrder.status}`);
+          const ELIGIBLE_STATUSES = ['PAID', 'SHIPPED', 'DELIVERED', 'RETURN_REQUESTED', 'RETURNED'];
+          if (!ELIGIBLE_STATUSES.includes(fetchedOrder.status?.toUpperCase())) {
+            setError(`Tax invoices are generated for Paid, Shipped, or Delivered orders. Current status: ${fetchedOrder.status}`);
           } else {
             setOrder(fetchedOrder);
           }

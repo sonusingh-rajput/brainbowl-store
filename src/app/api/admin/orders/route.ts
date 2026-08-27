@@ -7,6 +7,30 @@ async function checkAdminAuth() {
   return cookieStore.get("admin_session")?.value === "true";
 }
 
+// GET all orders for admin dashboard
+export async function GET() {
+  if (!(await checkAdminAuth())) {
+    return NextResponse.json(
+      { success: false, error: "Unauthorized" },
+      { status: 401 }
+    );
+  }
+
+  try {
+    const orders = await prisma.order.findMany({
+      orderBy: { createdAt: "desc" },
+    });
+
+    return NextResponse.json({ success: true, data: orders });
+  } catch (error: any) {
+    console.error("Error fetching admin orders:", error);
+    return NextResponse.json(
+      { success: false, error: error.message || "Failed to fetch orders" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function PUT(req: Request) {
   if (!(await checkAdminAuth())) {
     return NextResponse.json(

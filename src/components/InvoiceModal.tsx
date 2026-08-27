@@ -30,8 +30,10 @@ interface InvoiceModalProps {
   onClose: () => void;
 }
 
+const ELIGIBLE_INVOICE_STATUSES = ['PAID', 'SHIPPED', 'DELIVERED', 'RETURN_REQUESTED', 'RETURNED'];
+
 export default function InvoiceModal({ order, isOpen, onClose }: InvoiceModalProps) {
-  if (!isOpen || !order || order.status !== 'PAID') return null;
+  if (!isOpen || !order || !ELIGIBLE_INVOICE_STATUSES.includes(order.status?.toUpperCase())) return null;
 
   const orderDate = new Date(order.createdAt).toLocaleDateString('en-IN', {
     day: '2-digit',
