@@ -27,6 +27,13 @@ export const metadata: Metadata = {
     'Gluten Free',
     'No Added Sugar',
   ],
+  icons: {
+    icon: [
+      { url: '/Brain Bowl svg.svg', type: 'image/svg+xml' },
+    ],
+    shortcut: '/Brain Bowl svg.svg',
+    apple: '/Brain Bowl svg.svg',
+  },
   openGraph: {
     title: 'BrainBowl — Premium Superfood Makhana Wellness Drink',
     description:
@@ -58,6 +65,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${inter.variable} ${playfair.variable}`}>
+      <head>
+        <link rel="icon" href="/Brain Bowl svg.svg" type="image/svg+xml" />
+      </head>
       <body className="bg-[#0b1711] text-[#f4efe6] font-sans antialiased selection:bg-[#d4af37] selection:text-[#0b1711]">
         <Toaster
           position="top-right"

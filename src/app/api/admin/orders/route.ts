@@ -16,7 +16,15 @@ export async function PUT(req: Request) {
   }
 
   try {
-    const { orderId, awbNumber, courierUrl, status ,shippingCost} = await req.json();
+    const {
+      orderId,
+      awbNumber,
+      courierUrl,
+      status,
+      shippingCost,
+      returnStatus,
+      returnAdminNotes,
+    } = await req.json();
 
     if (!orderId) {
       return NextResponse.json(
@@ -26,14 +34,40 @@ export async function PUT(req: Request) {
     }
 
     const updateData: any = {};
-    if (awbNumber !== undefined)
+    if (awbNumber !== undefined) {
       updateData.awbNumber = awbNumber?.trim() || null;
-    if (courierUrl !== undefined)
-      updateData.courierUrl = courierUrl?.trim() || null;
-    if (status !== undefined) updateData.status = status;
+    }
+    if (courierUrl !== undefined) {
+      const trimmed = courierUrl?.trim();
+      if (!trimmed) {
+        updateData.courierUrl = null;
+      } else if (/^https?:\/\//i.test(trimmed)) {
+        updateData.courierUrl = trimmed;
+      } else {
+        updateData.courierUrl = `https://${trimmed}`;
+      }
+    }
+    if (status !== undefined) {
+      updateData.status = status;
+      if (status === "DELIVERED") {
+        updateData.deliveredAt = new Date();
+      }
+    }
     if (shippingCost !== undefined) {
       updateData.shippingCost = Math.round(Number(shippingCost) * 100);
     }
+    if (returnStatus !== undefined) {
+      updateData.returnStatus = returnStatus;
+      if (returnStatus === "APPROVED") {
+        updateData.status = "RETURNED";
+      } else if (returnStatus === "REJECTED") {
+        updateData.status = "DELIVERED";
+      }
+    }
+    if (returnAdminNotes !== undefined) {
+      updateData.returnAdminNotes = returnAdminNotes?.trim() || null;
+    }
+
     const updatedOrder = await prisma.order.update({
       where: { id: orderId },
       data: updateData,

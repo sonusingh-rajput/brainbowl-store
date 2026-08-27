@@ -26,7 +26,15 @@ import {
   Search,
   Tag,
   Truck,
+  FileText,
+  Upload,
+  RotateCcw,
+  Copy,
+  Check,
+  AlertTriangle,
 } from 'lucide-react';
+import { formatExternalUrl } from '@/lib/formatUrl';
+import InvoiceModal, { InvoiceOrder } from '@/components/InvoiceModal';
 
 // Chart.js Registration for Admin Graphics
 import {
@@ -62,7 +70,8 @@ interface ProductItem {
   id: string;
   name: string;
   sku?: string;
-  price: number; // Stored in paise (e.g. 29900 = ₹299.00)
+  price: number; // Stored in paise (e.g. 49900 = ₹499.00)
+  originalPrice?: number | null; // Stored in paise (e.g. 79900 = ₹799.00)
   stock: number;
   imageUrl?: string;
   description?: string;
@@ -72,12 +81,24 @@ interface ProductItem {
 
 interface OrderItem {
   id: string;
+  receiptId: string;
   customerName: string;
   customerEmail: string;
+  customerPhone?: string;
+  shippingAddress?: string;
   amount: number;
+  shippingCost?: number;
   status: string;
+  razorpayPaymentId?: string | null;
   awbNumber?: string | null;
   courierUrl?: string | null;
+  deliveredAt?: string | null;
+  returnReason?: string | null;
+  returnDetails?: string | null;
+  returnUpi?: string | null;
+  returnStatus?: string | null;
+  returnRequestedAt?: string | null;
+  returnAdminNotes?: string | null;
   createdAt: string;
 }
 
@@ -128,19 +149,29 @@ export default function AdminDashboard() {
     [key: string]: { awbNumber: string; courierUrl: string };
   }>({});
 
+  // Order Sub-filter & Return Management State
+  const [orderFilter, setOrderFilter] = useState<'ALL' | 'ACTIVE' | 'DELIVERED' | 'RETURNS' | 'COMPLETED_RETURNS'>('ALL');
+  const [copiedUpiId, setCopiedUpiId] = useState<string | null>(null);
+
+  // Invoice Modal State for Admin
+  const [selectedInvoiceOrder, setSelectedInvoiceOrder] = useState<InvoiceOrder | null>(null);
+  const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
+
   // Product Drawer / Modal Form State
   const [productModalOpen, setProductModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductItem | null>(null);
   const [productForm, setProductForm] = useState({
-    name: '',
-    sku: '',
-    price: '299',
-    stock: '100',
-    imageUrl: '',
-    description: '',
-    seoTitle: '',
-    seoDescription: '',
+    name: 'Brain Bowl Powder',
+    sku: 'POW-100',
+    price: '499',
+    originalPrice: '799',
+    stock: '500',
+    imageUrl: '/product_image.jpeg',
+    description: '100% Plant-Based Superfood Makhana',
+    seoTitle: 'BrainBowl — Premium Superfood Makhana',
+    seoDescription: 'High-protein, low-calorie superfood snack',
   });
+  const [uploadingImage, setUploadingImage] = useState(false);
 
   // Admin Auth Form State
   const [username, setUsername] = useState('');
@@ -218,8 +249,24 @@ export default function AdminDashboard() {
         setAwbInputs(initialAwbInputs);
       }
 
-      if (prodData.success) {
-        setProducts(prodData.data || []);
+      if (prodData.success && prodData.data) {
+        const fetchedProds: ProductItem[] = prodData.data;
+        setProducts(fetchedProds);
+        if (fetchedProds.length > 0) {
+          const first = fetchedProds[0];
+          setEditingProduct(first);
+          setProductForm({
+            name: first.name,
+            sku: first.sku || 'BB-ROAST-01',
+            price: (first.price / 100).toString(),
+            originalPrice: first.originalPrice ? (first.originalPrice / 100).toString() : '799',
+            stock: first.stock.toString(),
+            imageUrl: first.imageUrl || '/product_image.jpeg',
+            description: first.description || '100% Plant-Based Superfood Makhana',
+            seoTitle: first.seoTitle || 'BrainBowl — Premium Superfood Makhana',
+            seoDescription: first.seoDescription || 'High-protein roasted superfood snack',
+          });
+        }
       }
     } catch {
       toast.error('Failed to load dashboard data');
@@ -320,7 +367,7 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleUpdateStatus = async (orderId: string, newStatus: 'PAID' | 'CANCELLED' | 'PENDING') => {
+  const handleUpdateStatus = async (orderId: string, newStatus: string) => {
     try {
       const res = await fetch('/api/admin/orders', {
         method: 'PUT',
@@ -338,6 +385,63 @@ export default function AdminDashboard() {
     } catch (err: any) {
       toast.error(err.message || 'Failed to update order status');
     }
+  };
+
+  const handleApproveReturn = async (orderId: string) => {
+    try {
+      const res = await fetch('/api/admin/orders', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId,
+          returnStatus: 'APPROVED',
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        toast.success('Return Approved & Refund Marked as Completed! 💸');
+        fetchAllData();
+      } else {
+        throw new Error(data.error);
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to approve return');
+    }
+  };
+
+  const handleRejectReturn = async (orderId: string) => {
+    const reason = prompt('Enter reason for rejecting this return request:');
+    if (reason === null) return; // user cancelled
+
+    try {
+      const res = await fetch('/api/admin/orders', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId,
+          returnStatus: 'REJECTED',
+          returnAdminNotes: reason || 'Return criteria not met.',
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        toast.success('Return request rejected.');
+        fetchAllData();
+      } else {
+        throw new Error(data.error);
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to reject return');
+    }
+  };
+
+  const handleCopyUpi = (upi: string, orderId: string) => {
+    navigator.clipboard.writeText(upi);
+    setCopiedUpiId(orderId);
+    toast.success('UPI ID copied to clipboard! 📋');
+    setTimeout(() => setCopiedUpiId(null), 2500);
   };
 
   const handleDeleteOrder = async (orderId: string) => {
@@ -370,6 +474,7 @@ export default function AdminDashboard() {
         name: prod.name,
         sku: prod.sku || '',
         price: (prod.price / 100).toString(),
+        originalPrice: prod.originalPrice ? (prod.originalPrice / 100).toString() : '799',
         stock: prod.stock.toString(),
         imageUrl: prod.imageUrl || '',
         description: prod.description || '',
@@ -381,8 +486,9 @@ export default function AdminDashboard() {
       setProductForm({
         name: '',
         sku: '',
-        price: '299',
-        stock: '100',
+        price: '499',
+        originalPrice: '799',
+        stock: '500',
         imageUrl: '',
         description: '',
         seoTitle: '',
@@ -392,6 +498,40 @@ export default function AdminDashboard() {
     setProductModalOpen(true);
   };
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const MAX_SIZE = 1 * 1024 * 1024; // 1 MB limit in bytes
+    if (file.size > MAX_SIZE) {
+      toast.error(`Image is ${(file.size / (1024 * 1024)).toFixed(2)} MB! Maximum allowed image size is 1 MB.`);
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    setUploadingImage(true);
+    const toastId = toast.loading('Uploading image (Max 1 MB)...');
+    try {
+      const res = await fetch('/api/admin/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (data.success) {
+        setProductForm((prev) => ({ ...prev, imageUrl: data.url }));
+        toast.success('Image uploaded successfully! 📸', { id: toastId });
+      } else {
+        throw new Error(data.error);
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Image upload failed', { id: toastId });
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -399,14 +539,14 @@ export default function AdminDashboard() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id: editingProduct?.id,
+          id: editingProduct?.id || products[0]?.id,
           ...productForm,
         }),
       });
 
       const data = await res.json();
       if (data.success) {
-        toast.success(editingProduct ? 'Product Updated! ✏️' : 'New Product Added! 📦');
+        toast.success('Product Price & Stock Updated! 📦');
         setProductModalOpen(false);
         fetchAllData();
       } else {
@@ -517,15 +657,16 @@ export default function AdminDashboard() {
   // 11. MAIN DASHBOARD UI RENDER
   // ============================================================================
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white p-6 md:p-10 font-sans">
-      <div className="mx-auto max-w-7xl">
+    <>
+      <div className="min-h-screen bg-[#0a0a0a] text-white p-6 md:p-10 font-sans print:hidden">
+        <div className="mx-auto max-w-7xl">
         {/* SECTION A: TOP BAR */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-[#262626]">
           <div>
             <a href="/" className="flex items-center gap-1 text-xs font-bold text-[#22c55e] hover:underline mb-2">
               <ArrowLeft className="h-3.5 w-3.5" /> Back to Store
             </a>
-            <h1 className="text-3xl font-black tracking-tight">Shopify-Style Admin Control Center</h1>
+            <h1 className="text-3xl font-black tracking-tight">Brain Bowl Control Panel</h1>
           </div>
 
           <div className="flex items-center gap-3">
@@ -614,14 +755,19 @@ export default function AdminDashboard() {
         <div className="flex items-center gap-2 mt-6 border-b border-[#262626] pb-3 overflow-x-auto">
           {[
             { id: 'overview', label: 'Overview Graphics', icon: Layers },
-            { id: 'products', label: `Products Catalog (${products.length})`, icon: Package },
-            { id: 'orders', label: `Orders & AWB (${orders.length})`, icon: ShoppingBag },
+            { id: 'products', label: 'Product & Stock Pricing', icon: Package },
+            {
+              id: 'orders',
+              label: `Orders & Deliveries (${orders.length})`,
+              badge: orders.filter((o) => o.status === 'RETURN_REQUESTED').length,
+              icon: ShoppingBag,
+            },
             { id: 'users', label: `Customers (${users.length})`, icon: Users },
           ].map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition relative ${
                 activeTab === tab.id
                   ? 'bg-[#16a34a] text-white shadow-lg'
                   : 'bg-[#141414] border border-[#262626] text-gray-400 hover:text-white'
@@ -629,6 +775,11 @@ export default function AdminDashboard() {
             >
               <tab.icon className="h-4 w-4" />
               {tab.label}
+              {tab.badge !== undefined && tab.badge > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 rounded-full bg-amber-500 text-black text-[10px] font-extrabold animate-pulse">
+                  {tab.badge} Return
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -640,20 +791,28 @@ export default function AdminDashboard() {
               <div className="rounded-2xl border border-[#262626] bg-[#141414] p-6">
                 <span className="text-xs font-bold uppercase text-gray-400">Total Sales</span>
                 <p className="mt-3 text-3xl font-black text-white">₹{stats.totalSales.toLocaleString('en-IN')}</p>
+                <span className="text-[10px] text-gray-500">Gross Sales Revenue</span>
               </div>
               <div className="rounded-2xl border border-[#262626] bg-[#141414] p-6">
-                <span className="text-xs font-bold uppercase text-gray-400">Total Customers</span>
-                <p className="mt-3 text-3xl font-black text-white">{stats.totalUsers}</p>
-              </div>
-              <div className="rounded-2xl border border-[#262626] bg-[#141414] p-6">
-                <span className="text-xs font-bold uppercase text-gray-400">Total Orders</span>
-                <p className="mt-3 text-3xl font-black text-white">{stats.totalOrders}</p>
-              </div>
-              <div className="rounded-2xl border border-[#262626] bg-[#141414] p-6">
-                <span className="text-xs font-bold uppercase text-gray-400">Total Inventory</span>
-                <p className="mt-3 text-3xl font-black text-white">
-                  {products.reduce((acc, p) => acc + p.stock, 0)} units
+                <span className="text-xs font-bold uppercase text-gray-400">Delivered Orders</span>
+                <p className="mt-3 text-3xl font-black text-emerald-400">
+                  {orders.filter((o) => o.status === 'DELIVERED').length}
                 </p>
+                <span className="text-[10px] text-gray-500">Successfully Received</span>
+              </div>
+              <div className="rounded-2xl border border-[#262626] bg-[#141414] p-6">
+                <span className="text-xs font-bold uppercase text-gray-400">Return Requests</span>
+                <p className="mt-3 text-3xl font-black text-amber-400">
+                  {orders.filter((o) => o.status === 'RETURN_REQUESTED').length}
+                </p>
+                <span className="text-[10px] text-gray-500">Pending Return Actions</span>
+              </div>
+              <div className="rounded-2xl border border-[#262626] bg-[#141414] p-6">
+                <span className="text-xs font-bold uppercase text-gray-400">Warehouse Stock</span>
+                <p className="mt-3 text-3xl font-black text-white">
+                  {productForm.stock || 0} units
+                </p>
+                <span className="text-[10px] text-gray-500">Live Inventory Count</span>
               </div>
             </div>
 
@@ -675,207 +834,575 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* SECTION E: SHOPIFY PRODUCTS CATALOG */}
+        {/* SECTION E: SINGLE PRODUCT & STOCK MANAGEMENT */}
         {activeTab === 'products' && (
-          <div className="mt-8">
-            <div className="flex items-center justify-between mb-6">
+          <div className="mt-8 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#262626]">
               <div>
-                <h2 className="text-xl font-black text-white">Products Catalog</h2>
-                <p className="text-xs text-gray-400 mt-1">Manage product pricing, stock count, image URLs, and SEO metadata.</p>
+                <h2 className="text-xl font-black text-white">Product Price & Stock Management</h2>
+                <p className="text-xs text-gray-400 mt-1">
+                  Manage the selling amount (₹), regular MRP (₹), stock inventory, and product image for the storefront.
+                </p>
               </div>
-              <button
-                onClick={() => openProductModal()}
-                className="flex items-center gap-1.5 rounded-xl bg-[#16a34a] px-4 py-2.5 text-xs font-bold text-white shadow-lg hover:bg-[#15803d]"
-              >
-                <Plus className="h-4 w-4" /> Add Product
-              </button>
+              <div className="flex items-center gap-2">
+                <span className="px-3 py-1 rounded-full bg-green-950/60 border border-green-800/50 text-green-400 text-xs font-bold flex items-center gap-1.5">
+                  <CheckCircle className="h-3.5 w-3.5" /> Single Active Flagship Product
+                </span>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {products.map((prod) => (
-                <div key={prod.id} className="rounded-2xl border border-[#262626] bg-[#141414] overflow-hidden flex flex-col justify-between">
-                  <div>
-                    <div className="h-48 w-full bg-[#0a0a0a] relative flex items-center justify-center border-b border-[#262626]">
-                      {prod.imageUrl ? (
-                        <img src={prod.imageUrl} alt={prod.name} className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="text-center text-gray-600">
-                          <ImageIcon className="h-10 w-10 mx-auto mb-1" />
-                          <span className="text-[10px]">No image link set</span>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Column 1: Live Store Product Preview Card */}
+              <div className="lg:col-span-1 rounded-3xl border border-[#262626] bg-[#141414] overflow-hidden flex flex-col justify-between shadow-xl">
+                <div>
+                  <div className="h-64 w-full bg-[#0a0a0a] relative flex items-center justify-center border-b border-[#262626] p-4">
+                    <img
+                      src={productForm.imageUrl || '/product_image.jpeg'}
+                      alt={productForm.name || 'BrainBowl Product'}
+                      className="h-full w-full object-contain rounded-xl"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = '/product_image.jpeg';
+                      }}
+                    />
+                    <span
+                      className={`absolute top-4 right-4 px-3 py-1 rounded-full text-xs font-bold shadow-lg ${
+                        Number(productForm.stock) > 10
+                          ? 'bg-green-950 text-green-400 border border-green-800'
+                          : Number(productForm.stock) > 0
+                          ? 'bg-amber-950 text-amber-400 border border-amber-800'
+                          : 'bg-red-950 text-red-400 border border-red-800'
+                      }`}
+                    >
+                      {Number(productForm.stock) > 0 ? `${productForm.stock} In Stock` : 'Out of Stock'}
+                    </span>
+                  </div>
+
+                  <div className="p-6">
+                    {productForm.sku && (
+                      <span className="inline-flex items-center gap-1 text-[11px] bg-[#262626] text-[#d4af37] px-2.5 py-1 rounded-md font-mono mb-3 border border-[#333]">
+                        <Tag className="h-3 w-3" /> SKU: {productForm.sku}
+                      </span>
+                    )}
+                    <h3 className="font-bold text-white text-lg leading-snug">
+                      {productForm.name || 'BrainBowl Superfood Makhana'}
+                    </h3>
+                    <p className="mt-1 text-xs text-gray-400">
+                      {productForm.description || '100% Plant-Based Superfood Makhana'}
+                    </p>
+
+                    <div className="mt-4 pt-4 border-t border-[#262626] space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-gray-400">Selling Price:</span>
+                        <div className="flex items-baseline gap-2">
+                          <p className="text-2xl font-black text-[#22c55e]">
+                            ₹{Number(productForm.price || 499).toFixed(2)}
+                          </p>
+                          {productForm.originalPrice && Number(productForm.originalPrice) > Number(productForm.price) && (
+                            <span className="text-xs text-gray-500 line-through">
+                              ₹{Number(productForm.originalPrice).toFixed(2)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {productForm.originalPrice && Number(productForm.originalPrice) > Number(productForm.price) && (
+                        <div className="flex justify-end">
+                          <span className="text-[10px] font-bold text-[#d4af37] bg-[#d4af37]/10 px-2 py-0.5 rounded border border-[#d4af37]/30">
+                            {Math.round(((Number(productForm.originalPrice) - Number(productForm.price)) / Number(productForm.originalPrice)) * 100)}% OFF
+                          </span>
                         </div>
                       )}
-                      <span className={`absolute top-3 right-3 px-2.5 py-1 rounded-full text-[10px] font-bold ${prod.stock > 10 ? 'bg-green-950 text-green-400 border border-green-800' : 'bg-red-950 text-red-400 border border-red-800'}`}>
-                        {prod.stock} in stock
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-6 pt-0">
+                  <div className="rounded-xl bg-[#0a0a0a] p-3 text-[11px] text-gray-400 border border-[#262626]">
+                    💡 Price, stock, and image updates apply immediately to the front-end homepage and checkout.
+                  </div>
+                </div>
+              </div>
+
+              {/* Column 2 & 3: Instant Product & Stock Editor Form */}
+              <div className="lg:col-span-2 rounded-3xl border border-[#262626] bg-[#141414] p-6 sm:p-8 shadow-xl">
+                <div className="flex items-center gap-3 pb-5 border-b border-[#262626]">
+                  <div className="p-2.5 rounded-2xl bg-green-950/50 border border-green-800/40 text-[#22c55e]">
+                    <Package className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-white">Update Product Price & Stock</h3>
+                    <p className="text-xs text-gray-400">Set selling price, MRP, warehouse inventory units, and upload product photo.</p>
+                  </div>
+                </div>
+
+                <form onSubmit={handleSaveProduct} className="mt-6 space-y-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {/* Selling Price */}
+                    <div>
+                      <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider">
+                        Selling Price (₹) <span className="text-red-400">*</span>
+                      </label>
+                      <div className="mt-1.5 flex items-center rounded-xl border border-[#262626] bg-[#0a0a0a] px-3.5 py-3 focus-within:border-[#22c55e]">
+                        <span className="text-sm font-bold text-[#22c55e] mr-2">₹</span>
+                        <input
+                          type="number"
+                          required
+                          min="1"
+                          placeholder="499"
+                          className="w-full bg-transparent text-sm font-bold text-white focus:outline-none"
+                          value={productForm.price}
+                          onChange={(e) => setProductForm({ ...productForm, price: e.target.value })}
+                        />
+                      </div>
+                      <span className="text-[10px] text-gray-500 mt-1 block">Actual customer checkout price.</span>
+                    </div>
+
+                    {/* Original MRP */}
+                    <div>
+                      <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider">
+                        Original Price / MRP (₹)
+                      </label>
+                      <div className="mt-1.5 flex items-center rounded-xl border border-[#262626] bg-[#0a0a0a] px-3.5 py-3 focus-within:border-gray-500">
+                        <span className="text-sm font-bold text-gray-400 mr-2">₹</span>
+                        <input
+                          type="number"
+                          min="1"
+                          placeholder="799"
+                          className="w-full bg-transparent text-sm font-bold text-white focus:outline-none"
+                          value={productForm.originalPrice}
+                          onChange={(e) => setProductForm({ ...productForm, originalPrice: e.target.value })}
+                        />
+                      </div>
+                      <span className="text-[10px] text-gray-500 mt-1 block">Strikethrough MRP price.</span>
+                    </div>
+
+                    {/* Stock Inventory */}
+                    <div>
+                      <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider">
+                        Stock Inventory (Units) <span className="text-red-400">*</span>
+                      </label>
+                      <div className="mt-1.5 flex items-center rounded-xl border border-[#262626] bg-[#0a0a0a] px-3.5 py-3 focus-within:border-[#22c55e]">
+                        <Package className="h-4 w-4 text-gray-500 mr-2" />
+                        <input
+                          type="number"
+                          required
+                          min="0"
+                          placeholder="500"
+                          className="w-full bg-transparent text-sm font-bold text-white focus:outline-none"
+                          value={productForm.stock}
+                          onChange={(e) => setProductForm({ ...productForm, stock: e.target.value })}
+                        />
+                      </div>
+                      <span className="text-[10px] text-gray-500 mt-1 block">Physical units available in stock.</span>
+                    </div>
+                  </div>
+
+                  {/* Image Upload & Link Section */}
+                  <div className="rounded-2xl border border-[#262626] bg-[#0a0a0a] p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider">
+                        Product Photo / Image (Max 1 MB)
+                      </label>
+                      <span className="text-[10px] font-semibold text-[#d4af37] bg-[#d4af37]/10 px-2 py-0.5 rounded border border-[#d4af37]/20">
+                        Max Size: 1 MB
                       </span>
                     </div>
 
-                    <div className="p-5">
-                      {prod.sku && (
-                        <span className="inline-flex items-center gap-1 text-[10px] bg-[#262626] text-gray-300 px-2 py-0.5 rounded font-mono mb-2">
-                          <Tag className="h-3 w-3 text-[#22c55e]" /> {prod.sku}
-                        </span>
-                      )}
-                      <h3 className="font-bold text-white text-base truncate">{prod.name}</h3>
-                      <p className="mt-2 text-2xl font-black text-[#22c55e]">
-                        ₹{(prod.price / 100).toFixed(2)}
-                      </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                      {/* Direct File Upload */}
+                      <div>
+                        <label className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-[#404040] bg-[#141414] p-3 text-xs font-bold text-gray-300 hover:border-[#22c55e] hover:text-white cursor-pointer transition">
+                          <Upload className="h-4 w-4 text-[#22c55e]" />
+                          <span>{uploadingImage ? 'Uploading...' : 'Upload Image (Max 1 MB)'}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            disabled={uploadingImage}
+                            onChange={handleImageUpload}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
+
+                      {/* Or Direct URL Input */}
+                      <div>
+                        <input
+                          type="text"
+                          placeholder="/product_image.jpeg or https://..."
+                          className="w-full rounded-xl border border-[#262626] bg-[#141414] p-3 text-xs text-white focus:border-[#22c55e] focus:outline-none"
+                          value={productForm.imageUrl}
+                          onChange={(e) => setProductForm({ ...productForm, imageUrl: e.target.value })}
+                        />
+                      </div>
                     </div>
                   </div>
 
-                  <div className="p-5 pt-0 border-t border-[#262626] mt-4 flex items-center justify-between">
-                    <span className="text-[11px] text-gray-500 truncate max-w-[180px]">{prod.seoTitle || 'No SEO title'}</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                    {/* Product Name */}
+                    <div>
+                      <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider">
+                        Product Display Title
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Brain Bowl Powder"
+                        className="mt-1.5 w-full rounded-xl border border-[#262626] bg-[#0a0a0a] p-3 text-xs text-white focus:border-[#22c55e] focus:outline-none"
+                        value={productForm.name}
+                        onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
+                      />
+                    </div>
+
+                    {/* Product SKU */}
+                    <div>
+                      <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider">
+                        SKU Identifier
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="POW-100"
+                        className="mt-1.5 w-full rounded-xl border border-[#262626] bg-[#0a0a0a] p-3 text-xs text-white focus:border-[#22c55e] focus:outline-none font-mono"
+                        value={productForm.sku}
+                        onChange={(e) => setProductForm({ ...productForm, sku: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Description */}
+                  <div>
+                    <label className="block text-xs font-bold text-gray-300 uppercase tracking-wider">
+                      Product Description / Benefits
+                    </label>
+                    <textarea
+                      rows={3}
+                      placeholder="100% Plant-Based Superfood Makhana with mental focus nutrients..."
+                      className="mt-1.5 w-full rounded-xl border border-[#262626] bg-[#0a0a0a] p-3 text-xs text-white focus:border-[#22c55e] focus:outline-none resize-none"
+                      value={productForm.description}
+                      onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="pt-4 border-t border-[#262626] flex justify-end">
                     <button
-                      onClick={() => openProductModal(prod)}
-                      className="flex items-center gap-1 rounded-xl bg-blue-950/50 border border-blue-800/40 text-blue-400 px-3 py-1.5 text-xs font-bold hover:bg-blue-900/60"
+                      type="submit"
+                      className="flex items-center gap-2 rounded-xl bg-[#16a34a] px-6 py-3.5 text-xs font-bold text-white shadow-lg hover:bg-[#15803d] transition cursor-pointer"
                     >
-                      <Edit2 className="h-3.5 w-3.5" /> Edit
+                      <Save className="h-4 w-4" /> Save Product Price & Stock
                     </button>
                   </div>
-                </div>
-              ))}
+                </form>
+              </div>
             </div>
           </div>
         )}
 
-        {/* SECTION F: ORDERS, PAYMENT STATUS & SAVED AWB MANAGEMENT */}
+        {/* SECTION F: ORDERS, PAYMENT STATUS, DELIVERIES & RETURN MANAGEMENT */}
         {activeTab === 'orders' && (
           <div className="mt-8 rounded-2xl border border-[#262626] bg-[#141414] p-6">
-            <h2 className="text-lg font-bold text-white mb-4">Orders & Saved AWB Tracking</h2>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+              <div>
+                <h2 className="text-lg font-bold text-white">Orders, Deliveries & Return Management</h2>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Update delivery stages (`PAID` ➔ `SHIPPED` ➔ `DELIVERED`), assign AWB, and process customer return & refund requests.
+                </p>
+              </div>
+
+              {/* Sub-filter tabs */}
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { id: 'ALL', label: `All (${orders.length})` },
+                  { id: 'ACTIVE', label: `In Transit (${orders.filter((o) => o.status === 'PAID' || o.status === 'SHIPPED').length})` },
+                  { id: 'DELIVERED', label: `Delivered (${orders.filter((o) => o.status === 'DELIVERED').length})` },
+                  { id: 'RETURNS', label: `Return Requests (${orders.filter((o) => o.status === 'RETURN_REQUESTED').length})`, alert: orders.filter((o) => o.status === 'RETURN_REQUESTED').length > 0 },
+                  { id: 'COMPLETED_RETURNS', label: `Completed Returns (${orders.filter((o) => o.status === 'RETURNED').length})` },
+                ].map((f) => (
+                  <button
+                    key={f.id}
+                    onClick={() => setOrderFilter(f.id as any)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                      orderFilter === f.id
+                        ? f.id === 'RETURNS'
+                          ? 'bg-amber-500 text-black font-extrabold shadow'
+                          : 'bg-[#16a34a] text-white shadow'
+                        : f.alert
+                        ? 'bg-amber-950/60 border border-amber-800 text-amber-300 hover:bg-amber-900/60'
+                        : 'bg-[#0a0a0a] border border-[#262626] text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    {f.alert && <AlertTriangle className="h-3 w-3 animate-pulse text-amber-400" />}
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs text-gray-300">
                 <thead className="border-b border-[#262626] text-gray-400 uppercase">
                   <tr>
-                    <th className="py-3 px-3">Customer</th>
+                    <th className="py-3 px-3">Customer & Receipt</th>
                     <th className="py-3 px-3">Amount</th>
-                    <th className="py-3 px-3">Payment Status</th>
-                    <th className="py-3 px-3">Saved AWB & Tracking Link</th>
+                    <th className="py-3 px-3">Delivery & Order Status</th>
+                    <th className="py-3 px-3">Saved AWB & Tracking</th>
+                    <th className="py-3 px-3">Return Details & Actions</th>
                     <th className="py-3 px-3 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#262626]">
-                  {orders.map((order) => {
-                    const isEditingThis = editingAwbId === order.id;
+                  {orders
+                    .filter((o) => {
+                      if (orderFilter === 'ACTIVE') return o.status === 'PAID' || o.status === 'SHIPPED';
+                      if (orderFilter === 'DELIVERED') return o.status === 'DELIVERED';
+                      if (orderFilter === 'RETURNS') return o.status === 'RETURN_REQUESTED';
+                      if (orderFilter === 'COMPLETED_RETURNS') return o.status === 'RETURNED';
+                      return true;
+                    })
+                    .map((order) => {
+                      const isEditingThis = editingAwbId === order.id;
 
-                    return (
-                      <tr key={order.id} className="hover:bg-[#1a1a1a]">
-                        <td className="py-4 px-3 font-semibold text-white">
-                          {order.customerName}
-                          <span className="block text-[10px] text-gray-500">{order.customerEmail}</span>
-                        </td>
+                      return (
+                        <tr key={order.id} className="hover:bg-[#1a1a1a] transition">
+                          <td className="py-4 px-3 font-semibold text-white">
+                            <div className="flex flex-col">
+                              <span>{order.customerName}</span>
+                              <span className="text-[10px] text-gray-500 font-mono">#{order.receiptId || order.id.slice(0, 8)}</span>
+                              <span className="text-[10px] text-gray-400">{order.customerEmail}</span>
+                              {order.customerPhone && (
+                                <span className="text-[10px] text-gray-500">+91 {order.customerPhone}</span>
+                              )}
+                            </div>
+                          </td>
 
-                        <td className="py-4 px-3 font-bold text-white">₹{(order.amount / 100).toFixed(2)}</td>
+                          <td className="py-4 px-3 font-bold text-white">
+                            ₹{(order.amount / 100).toFixed(2)}
+                            {order.shippingCost ? (
+                              <span className="block text-[10px] text-gray-500">+ ₹{(order.shippingCost / 100).toFixed(2)} ship</span>
+                            ) : null}
+                          </td>
 
-                        {/* Status Toggle & Confirmation */}
-                        <td className="py-4 px-3">
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                                order.status === 'PAID'
-                                  ? 'bg-green-950 text-green-400 border border-green-800'
-                                  : order.status === 'CANCELLED'
-                                  ? 'bg-red-950 text-red-400 border border-red-800'
-                                  : 'bg-amber-950 text-amber-400 border border-amber-800'
-                              }`}
-                            >
-                              {order.status}
-                            </span>
+                          {/* Dynamic Order & Delivery Status Selector */}
+                          <td className="py-4 px-3">
+                            <div className="flex flex-col gap-1.5 items-start">
+                              <select
+                                value={order.status}
+                                onChange={(e) => handleUpdateStatus(order.id, e.target.value)}
+                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border focus:outline-none cursor-pointer ${
+                                  order.status === 'DELIVERED'
+                                    ? 'bg-emerald-950 text-emerald-300 border-emerald-800'
+                                    : order.status === 'SHIPPED'
+                                    ? 'bg-cyan-950 text-cyan-300 border-cyan-800'
+                                    : order.status === 'RETURN_REQUESTED'
+                                    ? 'bg-amber-950 text-amber-300 border-amber-800'
+                                    : order.status === 'RETURNED'
+                                    ? 'bg-purple-950 text-purple-300 border-purple-800'
+                                    : order.status === 'PAID'
+                                    ? 'bg-green-950 text-green-300 border-green-800'
+                                    : order.status === 'CANCELLED'
+                                    ? 'bg-red-950 text-red-300 border-red-800'
+                                    : 'bg-amber-950 text-amber-300 border-amber-800'
+                                }`}
+                              >
+                                <option value="PAID" className="bg-[#141414] text-green-400">✓ PAID & CONFIRMED</option>
+                                <option value="SHIPPED" className="bg-[#141414] text-cyan-400">🚚 SHIPPED / IN TRANSIT</option>
+                                <option value="DELIVERED" className="bg-[#141414] text-emerald-400">🎉 DELIVERED</option>
+                                <option value="RETURN_REQUESTED" className="bg-[#141414] text-amber-400">🔄 RETURN REQUESTED</option>
+                                <option value="RETURNED" className="bg-[#141414] text-purple-400">✨ RETURNED & REFUNDED</option>
+                                <option value="CANCELLED" className="bg-[#141414] text-red-400">✕ CANCELLED</option>
+                                <option value="PENDING" className="bg-[#141414] text-amber-400">⏳ PENDING</option>
+                              </select>
 
-                            {order.status === 'PENDING' && (
-                              <div className="flex gap-1">
+                              {order.deliveredAt && order.status === 'DELIVERED' && (
+                                <span className="text-[10px] text-emerald-400/80">
+                                  Delivered: {new Date(order.deliveredAt).toLocaleDateString('en-IN')}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* Saved AWB & Tracking Link Display with Edit Control */}
+                          <td className="py-4 px-3">
+                            {isEditingThis ? (
+                              <div className="flex flex-col sm:flex-row items-center gap-2">
+                                <input
+                                  type="text"
+                                  placeholder="AWB Number"
+                                  value={awbInputs[order.id]?.awbNumber || ''}
+                                  onChange={(e) =>
+                                    setAwbInputs({
+                                      ...awbInputs,
+                                      [order.id]: { ...awbInputs[order.id], awbNumber: e.target.value },
+                                    })
+                                  }
+                                  className="w-32 rounded-lg border border-[#262626] bg-[#0a0a0a] px-2.5 py-1.5 text-xs text-white focus:border-[#22c55e] focus:outline-none"
+                                />
+                                <input
+                                  type="url"
+                                  placeholder="Courier Link"
+                                  value={awbInputs[order.id]?.courierUrl || ''}
+                                  onChange={(e) =>
+                                    setAwbInputs({
+                                      ...awbInputs,
+                                      [order.id]: { ...awbInputs[order.id], courierUrl: e.target.value },
+                                    })
+                                  }
+                                  className="w-40 rounded-lg border border-[#262626] bg-[#0a0a0a] px-2.5 py-1.5 text-xs text-white focus:border-[#22c55e] focus:outline-none"
+                                />
                                 <button
-                                  onClick={() => handleUpdateStatus(order.id, 'PAID')}
-                                  className="p-1 rounded bg-green-900/50 text-green-400 hover:bg-green-800"
-                                  title="Confirm Payment"
+                                  onClick={() => handleSaveAwbAndLink(order.id)}
+                                  className="flex items-center gap-1 rounded-lg bg-[#16a34a] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#15803d]"
                                 >
-                                  <CheckCircle className="h-3.5 w-3.5" />
+                                  <Save className="h-3.5 w-3.5" /> Save
                                 </button>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-3">
+                                {order.awbNumber ? (
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono text-xs text-[#22c55e] font-bold bg-green-950/40 px-2.5 py-1 rounded-md border border-green-800/40">
+                                      {order.awbNumber}
+                                    </span>
+                                    <a
+                                      href={formatExternalUrl(order.courierUrl, order.awbNumber)}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-1 text-xs text-blue-400 hover:underline font-semibold"
+                                    >
+                                      Track <ExternalLink className="h-3 w-3" />
+                                    </a>
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-gray-500 italic">No AWB assigned</span>
+                                )}
                                 <button
-                                  onClick={() => handleUpdateStatus(order.id, 'CANCELLED')}
-                                  className="p-1 rounded bg-red-900/50 text-red-400 hover:bg-red-800"
-                                  title="Cancel Order"
+                                  onClick={() => setEditingAwbId(order.id)}
+                                  className="text-xs text-gray-400 hover:text-white underline ml-2 font-semibold"
                                 >
-                                  <XCircle className="h-3.5 w-3.5" />
+                                  {order.awbNumber ? 'Edit' : '+ Add AWB'}
                                 </button>
                               </div>
                             )}
-                          </div>
-                        </td>
+                          </td>
 
-                        {/* Saved AWB & Tracking Link Display with Edit Control */}
-                        <td className="py-4 px-3">
-                          {isEditingThis ? (
-                            <div className="flex flex-col sm:flex-row items-center gap-2">
-                              <input
-                                type="text"
-                                placeholder="AWB Number"
-                                value={awbInputs[order.id]?.awbNumber || ''}
-                                onChange={(e) =>
-                                  setAwbInputs({
-                                    ...awbInputs,
-                                    [order.id]: { ...awbInputs[order.id], awbNumber: e.target.value },
-                                  })
-                                }
-                                className="w-32 rounded-lg border border-[#262626] bg-[#0a0a0a] px-2.5 py-1.5 text-xs text-white focus:border-[#22c55e] focus:outline-none"
-                              />
-                              <input
-                                type="url"
-                                placeholder="Courier Link"
-                                value={awbInputs[order.id]?.courierUrl || ''}
-                                onChange={(e) =>
-                                  setAwbInputs({
-                                    ...awbInputs,
-                                    [order.id]: { ...awbInputs[order.id], courierUrl: e.target.value },
-                                  })
-                                }
-                                className="w-40 rounded-lg border border-[#262626] bg-[#0a0a0a] px-2.5 py-1.5 text-xs text-white focus:border-[#22c55e] focus:outline-none"
-                              />
-                              <button
-                                onClick={() => handleSaveAwbAndLink(order.id)}
-                                className="flex items-center gap-1 rounded-lg bg-[#16a34a] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#15803d]"
-                              >
-                                <Save className="h-3.5 w-3.5" /> Save
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-3">
-                              {order.awbNumber ? (
-                                <div className="flex items-center gap-2">
-                                  <span className="font-mono text-xs text-[#22c55e] font-bold bg-green-950/40 px-2.5 py-1 rounded-md border border-green-800/40">
-                                    {order.awbNumber}
+                          {/* Return Request Details & Processing Actions */}
+                          <td className="py-4 px-3">
+                            {order.status === 'RETURN_REQUESTED' ? (
+                              <div className="p-3 rounded-xl bg-amber-950/30 border border-amber-800/40 text-xs text-amber-200 space-y-2 min-w-[220px]">
+                                <div>
+                                  <span className="font-bold text-amber-400 block text-[11px]">
+                                    Reason: {order.returnReason || 'Product Return'}
                                   </span>
-                                  <a
-                                    href={order.courierUrl || `https://www.delhivery.com/track/package/${order.awbNumber}`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="flex items-center gap-1 text-xs text-blue-400 hover:underline"
-                                  >
-                                    Track <ExternalLink className="h-3 w-3" />
-                                  </a>
+                                  {order.returnDetails && (
+                                    <p className="text-[10px] text-gray-300 italic mt-0.5 line-clamp-2" title={order.returnDetails}>
+                                      &quot;{order.returnDetails}&quot;
+                                    </p>
+                                  )}
                                 </div>
+
+                                {order.returnUpi && (
+                                  <div className="flex items-center justify-between bg-[#0a0a0a] p-1.5 rounded-lg border border-[#262626]">
+                                    <span className="font-mono text-[10px] text-[#22c55e] truncate max-w-[130px]" title={order.returnUpi}>
+                                      {order.returnUpi}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCopyUpi(order.returnUpi!, order.id)}
+                                      className="p-1 text-gray-400 hover:text-white transition"
+                                      title="Copy UPI ID"
+                                    >
+                                      {copiedUpiId === order.id ? (
+                                        <Check className="h-3.5 w-3.5 text-green-400" />
+                                      ) : (
+                                        <Copy className="h-3.5 w-3.5" />
+                                      )}
+                                    </button>
+                                  </div>
+                                )}
+
+                                <div className="flex items-center gap-1.5 pt-1">
+                                  <button
+                                    onClick={() => handleApproveReturn(order.id)}
+                                    className="flex-1 rounded-lg bg-green-700 hover:bg-green-600 px-2 py-1 text-[11px] font-bold text-white transition flex items-center justify-center gap-1"
+                                    title="Approve Return and Mark Refund as Processed"
+                                  >
+                                    <Check className="h-3 w-3" /> Approve & Refund
+                                  </button>
+                                  <button
+                                    onClick={() => handleRejectReturn(order.id)}
+                                    className="rounded-lg bg-red-950/60 border border-red-800/60 hover:bg-red-900/60 px-2 py-1 text-[11px] font-bold text-red-300 transition flex items-center justify-center gap-1"
+                                    title="Reject Return Request"
+                                  >
+                                    <XCircle className="h-3 w-3" /> Reject
+                                  </button>
+                                </div>
+                              </div>
+                            ) : order.status === 'RETURNED' ? (
+                              <div className="p-2 rounded-xl bg-purple-950/30 border border-purple-800/40 text-purple-300 text-xs">
+                                <span className="font-bold flex items-center gap-1">
+                                  <CheckCircle className="h-3 w-3" /> Return Approved
+                                </span>
+                                {order.returnUpi && (
+                                  <span className="text-[10px] text-gray-400 block font-mono">
+                                    Refunded to: {order.returnUpi}
+                                  </span>
+                                )}
+                              </div>
+                            ) : order.status === 'DELIVERED' ? (
+                              <span className="text-[11px] text-emerald-400/80 italic">
+                                Delivered (Eligible for return)
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-gray-500 italic">
+                                In fulfillment
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="py-4 px-3 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              {order.status === 'PAID' || order.status === 'SHIPPED' || order.status === 'DELIVERED' || order.status === 'RETURN_REQUESTED' || order.status === 'RETURNED' ? (
+                                <button
+                                  onClick={() => {
+                                    setSelectedInvoiceOrder({
+                                      id: order.id,
+                                      receiptId: order.receiptId || order.id.slice(0, 8),
+                                      amount: order.amount,
+                                      shippingCost: order.shippingCost || 0,
+                                      status: order.status,
+                                      customerName: order.customerName,
+                                      customerEmail: order.customerEmail,
+                                      customerPhone: order.customerPhone || '',
+                                      shippingAddress: order.shippingAddress || 'Address on file',
+                                      razorpayPaymentId: order.razorpayPaymentId,
+                                      awbNumber: order.awbNumber,
+                                      createdAt: order.createdAt,
+                                    });
+                                    setInvoiceModalOpen(true);
+                                  }}
+                                  className="rounded-lg bg-[#262626] border border-gray-700 p-2 text-gray-300 hover:bg-[#333] hover:text-white transition cursor-pointer"
+                                  title="Generate / Print Tax Invoice"
+                                >
+                                  <FileText className="h-4 w-4 text-[#d4af37]" />
+                                </button>
                               ) : (
-                                <span className="text-xs text-gray-500 italic">No AWB assigned</span>
+                                <span
+                                  className="rounded-lg bg-[#1a1a1a] border border-gray-800 p-2 text-gray-600 opacity-40 cursor-not-allowed inline-flex items-center justify-center"
+                                  title="Invoice only available for PAID orders"
+                                >
+                                  <FileText className="h-4 w-4 text-gray-600" />
+                                </span>
                               )}
                               <button
-                                onClick={() => setEditingAwbId(order.id)}
-                                className="text-xs text-gray-400 hover:text-white underline ml-2 font-semibold"
+                                onClick={() => handleDeleteOrder(order.id)}
+                                className="rounded-lg bg-red-950/40 border border-red-800/50 p-2 text-red-400 hover:bg-red-900/60 transition"
+                                title="Delete Order"
                               >
-                                {order.awbNumber ? 'Edit' : '+ Add AWB'}
+                                <Trash2 className="h-4 w-4" />
                               </button>
                             </div>
-                          )}
-                        </td>
-
-                        <td className="py-4 px-3 text-right">
-                          <button
-                            onClick={() => handleDeleteOrder(order.id)}
-                            className="rounded-lg bg-red-950/40 border border-red-800/50 p-2 text-red-400 hover:bg-red-900/60"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                          </td>
+                        </tr>
+                      );
+                    })}
                 </tbody>
               </table>
             </div>
@@ -961,110 +1488,17 @@ export default function AdminDashboard() {
           </div>
         )}
       </div>
-
-      {/* SECTION H: SHOPIFY PRODUCT DRAWER / MODAL */}
-      {productModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-md">
-          <div className="w-full max-w-2xl rounded-3xl border border-[#262626] bg-[#141414] p-8 text-white max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-black">{editingProduct ? 'Edit Product' : 'Add New Product'}</h2>
-
-            <form onSubmit={handleSaveProduct} className="mt-6 space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-400 uppercase">Product Title</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. BrainBowl Classic Roasted Makhana (250g)"
-                  className="mt-1 w-full rounded-xl border border-[#262626] bg-[#0a0a0a] p-3 text-xs text-white focus:border-[#22c55e] focus:outline-none"
-                  value={productForm.name}
-                  onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-400 uppercase">Product Image URL Link</label>
-                <input
-                  type="url"
-                  placeholder="https://images.unsplash.com/photo-1599490659213..."
-                  className="mt-1 w-full rounded-xl border border-[#262626] bg-[#0a0a0a] p-3 text-xs text-white focus:border-[#22c55e] focus:outline-none"
-                  value={productForm.imageUrl}
-                  onChange={(e) => setProductForm({ ...productForm, imageUrl: e.target.value })}
-                />
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-400 uppercase">Price (₹)</label>
-                  <input
-                    type="number"
-                    required
-                    placeholder="299"
-                    className="mt-1 w-full rounded-xl border border-[#262626] bg-[#0a0a0a] p-3 text-xs text-white focus:border-[#22c55e] focus:outline-none"
-                    value={productForm.price}
-                    onChange={(e) => setProductForm({ ...productForm, price: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-400 uppercase">Stock Inventory</label>
-                  <input
-                    type="number"
-                    required
-                    placeholder="100"
-                    className="mt-1 w-full rounded-xl border border-[#262626] bg-[#0a0a0a] p-3 text-xs text-white focus:border-[#22c55e] focus:outline-none"
-                    value={productForm.stock}
-                    onChange={(e) => setProductForm({ ...productForm, stock: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-400 uppercase">SKU Code</label>
-                  <input
-                    type="text"
-                    placeholder="BB-MAK-001"
-                    className="mt-1 w-full rounded-xl border border-[#262626] bg-[#0a0a0a] p-3 text-xs text-white focus:border-[#22c55e] focus:outline-none"
-                    value={productForm.sku}
-                    onChange={(e) => setProductForm({ ...productForm, sku: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-400 uppercase">SEO Page Title</label>
-                <input
-                  type="text"
-                  placeholder="Organic Roasted Makhana | BrainBowl Store"
-                  className="mt-1 w-full rounded-xl border border-[#262626] bg-[#0a0a0a] p-3 text-xs text-white focus:border-[#22c55e] focus:outline-none"
-                  value={productForm.seoTitle}
-                  onChange={(e) => setProductForm({ ...productForm, seoTitle: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-400 uppercase">SEO Meta Description</label>
-                <textarea
-                  rows={2}
-                  placeholder="High-protein, low-calorie roasted superfood snack..."
-                  className="mt-1 w-full rounded-xl border border-[#262626] bg-[#0a0a0a] p-3 text-xs text-white focus:border-[#22c55e] focus:outline-none resize-none"
-                  value={productForm.seoDescription}
-                  onChange={(e) => setProductForm({ ...productForm, seoDescription: e.target.value })}
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t border-[#262626]">
-                <button
-                  type="button"
-                  onClick={() => setProductModalOpen(false)}
-                  className="rounded-xl border border-[#262626] bg-[#0a0a0a] px-4 py-2.5 text-xs text-gray-400"
-                >
-                  Cancel
-                </button>
-                <button type="submit" className="rounded-xl bg-[#16a34a] px-6 py-2.5 text-xs font-bold text-white shadow-lg hover:bg-[#15803d]">
-                  Save Product
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
+
+    {/* Reusable Tax Invoice Modal for Admin */}
+    <InvoiceModal
+      isOpen={invoiceModalOpen}
+      order={selectedInvoiceOrder}
+      onClose={() => {
+        setInvoiceModalOpen(false);
+        setSelectedInvoiceOrder(null);
+      }}
+    />
+  </>
   );
 }

@@ -39,7 +39,11 @@ interface HomeClientProps {
     id: string;
     name: string;
     price: number;
+    originalPrice?: number | null;
     stock: number;
+    imageUrl?: string | null;
+    description?: string | null;
+    sku?: string | null;
   };
 }
 
@@ -109,7 +113,7 @@ export default function HomeClient({ initialProduct }: HomeClientProps) {
       />
 
       {/* Modular Landing Page Sections */}
-      <HeroSection onBuyNow={handleBuyNow} />
+      <HeroSection onBuyNow={handleBuyNow} product={initialProduct} />
       <TrustBar />
       <ProblemSolution />
       <HealthBenefits />

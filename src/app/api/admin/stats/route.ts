@@ -21,16 +21,21 @@ export async function GET() {
         select: { id: true, name: true, email: true, phone: true, createdAt: true },
       }),
       prisma.order.findMany({
-        take: 20,
+        take: 50,
         orderBy: { createdAt: 'desc' },
         select: {
           id: true,
+          receiptId: true,
           customerName: true,
           customerEmail: true,
+          customerPhone: true,
+          shippingAddress: true,
           amount: true,
+          shippingCost: true,
           status: true,
-          awbNumber: true,    // <-- Ensure explicit select
-          courierUrl: true,   // <-- Ensure explicit select
+          razorpayPaymentId: true,
+          awbNumber: true,
+          courierUrl: true,
           createdAt: true,
         },
       }),

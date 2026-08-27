@@ -32,22 +32,32 @@ export async function GET() {
     if (user.email) filterConditions.push({ customerEmail: user.email });
     if (user.phone) filterConditions.push({ customerPhone: user.phone });
 
-    // 3. Query order history using `receiptId` (matching your Prisma schema)
-   const orders = filterConditions.length > 0
-  ? await prisma.order.findMany({
-      where: { OR: filterConditions },
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        receiptId: true,
-        amount: true,
-        status: true,
-        shippingAddress: true,
-        awbNumber: true, // <-- SELECT AWB NUMBER
-        createdAt: true,
-      },
-    })
-  : [];
+    // 3. Query order history with AWB Number, Delivery date & Return status
+    const orders = filterConditions.length > 0
+      ? await prisma.order.findMany({
+          where: { OR: filterConditions },
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            receiptId: true,
+            amount: true,
+            shippingCost: true,
+            status: true,
+            shippingAddress: true,
+            razorpayPaymentId: true,
+            awbNumber: true,
+            courierUrl: true,
+            deliveredAt: true,
+            returnReason: true,
+            returnDetails: true,
+            returnUpi: true,
+            returnStatus: true,
+            returnRequestedAt: true,
+            returnAdminNotes: true,
+            createdAt: true,
+          },
+        })
+      : [];
 
     return NextResponse.json({
       success: true,

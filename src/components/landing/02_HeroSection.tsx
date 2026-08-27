@@ -1,9 +1,27 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import Image from 'next/image';
 
-export default function HeroSection({ onBuyNow }: { onBuyNow: () => void }) {
+interface HeroSectionProps {
+  onBuyNow: () => void;
+  product?: {
+    name: string;
+    price: number;
+    originalPrice?: number | null;
+    stock: number;
+    imageUrl?: string | null;
+    description?: string | null;
+  };
+}
+
+export default function HeroSection({ onBuyNow, product }: HeroSectionProps) {
+  const sellingPrice = (product?.price || 49900) / 100;
+  const mrpPrice = product?.originalPrice ? product.originalPrice / 100 : Math.round(sellingPrice * 1.5);
+  const hasDiscount = mrpPrice > sellingPrice;
+  const discountPercent = hasDiscount ? Math.round(((mrpPrice - sellingPrice) / mrpPrice) * 100) : 0;
+  const productName = product?.name || 'BrainBowl Superfood Wellness Drink';
+  const productImage = product?.imageUrl || '/product_image.jpeg';
+
   return (
     <section className="relative overflow-hidden bg-[#0b1711] py-12 md:py-20 border-b border-[#2d4739]">
       {/* Background Gold Ambient Glows */}
@@ -28,23 +46,28 @@ export default function HeroSection({ onBuyNow }: { onBuyNow: () => void }) {
           </h1>
           
           <p className="mt-4 text-sm sm:text-base text-[#c2d1c7] leading-relaxed">
-            Nourish your brain and body with pure, natural ingredients. Packed with mental focus nutrients, immunity support, and sustained energy — with zero added sugar.
+            {product?.description ||
+              'Nourish your brain and body with pure, natural ingredients. Packed with mental focus nutrients, immunity support, and sustained energy — with zero added sugar.'}
           </p>
 
           <div className="mt-6 flex items-baseline gap-4">
-            <span className="text-3xl font-extrabold text-[#f4efe6]">₹499.00</span>
-            <span className="text-lg text-[#6b7c70] line-through">₹799.00</span>
-            <span className="text-xs font-bold text-[#d4af37] bg-[#d4af37]/10 px-2.5 py-1 rounded-md border border-[#d4af37]/30">
-              37% OFF
-            </span>
+            <span className="text-3xl font-extrabold text-[#f4efe6]">₹{sellingPrice.toFixed(2)}</span>
+            {hasDiscount && (
+              <span className="text-lg text-[#6b7c70] line-through">₹{mrpPrice.toFixed(2)}</span>
+            )}
+            {hasDiscount && (
+              <span className="text-xs font-bold text-[#d4af37] bg-[#d4af37]/10 px-2.5 py-1 rounded-md border border-[#d4af37]/30">
+                {discountPercent}% OFF
+              </span>
+            )}
           </div>
 
           <div className="mt-8 flex gap-4">
             <button
               onClick={onBuyNow}
-              className="rounded-xl bg-[#d4af37] px-8 py-4 font-bold text-[#0b1711] shadow-lg shadow-[#d4af37]/15 hover:bg-[#c39e2e] transition transform hover:scale-[1.02]"
+              className="rounded-xl bg-[#d4af37] px-8 py-4 font-bold text-[#0b1711] shadow-lg shadow-[#d4af37]/15 hover:bg-[#c39e2e] transition transform hover:scale-[1.02] cursor-pointer"
             >
-              Order Now — ₹499
+              Order Now — ₹{sellingPrice.toFixed(0)}
             </button>
           </div>
         </motion.div>
@@ -70,13 +93,13 @@ export default function HeroSection({ onBuyNow }: { onBuyNow: () => void }) {
 
             {/* Product Image Frame */}
             <div className="relative z-10 w-full max-w-sm flex justify-center transition duration-500 group-hover:scale-105 my-2">
-              <Image
-                src="/product_image.jpeg"
-                alt="BrainBowl Wellness Drink"
-                width={500}
-                height={400}
+              <img
+                src={productImage}
+                alt={productName}
                 className="w-full h-auto max-h-[280px] sm:max-h-[320px] object-contain rounded-2xl drop-shadow-[0_15px_20px_rgba(0,0,0,0.7)]"
-                priority
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = '/product_image.jpeg';
+                }}
               />
             </div>
 
@@ -86,7 +109,7 @@ export default function HeroSection({ onBuyNow }: { onBuyNow: () => void }) {
             {/* Card Caption */}
             <div className="w-full text-center z-10">
               <h3 className="font-serif font-bold text-[#f4efe6] text-lg sm:text-xl">
-                BrainBowl Wellness Drink (500g)
+                {productName}
               </h3>
               <p className="text-xs sm:text-sm font-medium text-[#d4af37] mt-1 tracking-wide">
                 Mental Focus • Immunity • Sustained Energy

@@ -12,16 +12,31 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { orderId, awbNumber } = await req.json();
+    const { orderId, awbNumber, courierUrl } = await req.json();
 
     if (!orderId) {
       return NextResponse.json({ success: false, error: 'Order ID is required' }, { status: 400 });
     }
 
-    // 2. Update AWB Number in PostgreSQL
+    const updateData: any = {};
+    if (awbNumber !== undefined) {
+      updateData.awbNumber = awbNumber?.trim() || null;
+    }
+    if (courierUrl !== undefined) {
+      const trimmed = courierUrl?.trim();
+      if (!trimmed) {
+        updateData.courierUrl = null;
+      } else if (/^https?:\/\//i.test(trimmed)) {
+        updateData.courierUrl = trimmed;
+      } else {
+        updateData.courierUrl = `https://${trimmed}`;
+      }
+    }
+
+    // 2. Update in PostgreSQL
     const updatedOrder = await prisma.order.update({
       where: { id: orderId },
-      data: { awbNumber: awbNumber?.trim() || null },
+      data: updateData,
     });
 
     return NextResponse.json({
@@ -30,7 +45,7 @@ export async function POST(req: Request) {
     });
   } catch (error: any) {
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to update AWB number' },
+      { success: false, error: error.message || 'Failed to update AWB details' },
       { status: 500 }
     );
   }

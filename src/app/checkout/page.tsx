@@ -40,8 +40,24 @@ export default function CheckoutPage() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<"login" | "register">("login");
 
-  // Single Item Base Price in Paise (₹299 = 29900 paise)
-  const unitPrice = 29900;
+  // Dynamic Product State (Fetched from Database)
+  const [product, setProduct] = useState<{
+    id: string;
+    name: string;
+    price: number;
+    originalPrice?: number | null;
+    stock: number;
+    imageUrl?: string | null;
+  }>({
+    id: "default",
+    name: "BrainBowl Superfood Makhana",
+    price: 49900,
+    originalPrice: 79900,
+    stock: 100,
+    imageUrl: "/product_image.jpeg",
+  });
+
+  const unitPrice = product.price;
 
   // Quantity State (1 to Many Items)
   const [quantity, setQuantity] = useState(1);
@@ -66,7 +82,7 @@ export default function CheckoutPage() {
     state: "",
   });
 
-  // Fetch logged-in user profile & store shipping settings
+  // Fetch logged-in user profile, active product & store shipping settings
   useEffect(() => {
     async function initCheckout() {
       try {
@@ -80,7 +96,14 @@ export default function CheckoutPage() {
           });
         }
 
-        // 2. Fetch User Profile & Check Authentication
+        // 2. Fetch Active Product from Database
+        const prodRes = await fetch("/api/products");
+        const prodData = await prodRes.json();
+        if (prodData.success && prodData.data) {
+          setProduct(prodData.data);
+        }
+
+        // 3. Fetch User Profile & Check Authentication
         const userRes = await fetch("/api/auth/me");
         const userData = await userRes.json();
         if (userData.success && userData.user) {
@@ -533,14 +556,26 @@ export default function CheckoutPage() {
                 Order Summary
               </h2>
 
-              <div className="flex items-center justify-between py-4 border-b border-[#262626]">
-                <div>
-                  <p className="text-sm font-bold text-white">
-                    BrainBowl Roasted Makhana
-                  </p>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    Unit Price: ₹{(unitPrice / 100).toFixed(2)}
-                  </p>
+              <div className="flex items-center justify-between py-4 border-b border-[#262626] gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="h-12 w-12 rounded-xl bg-[#0a0a0a] border border-[#262626] p-1 flex items-center justify-center shrink-0 overflow-hidden">
+                    <img
+                      src={product.imageUrl || "/product_image.jpeg"}
+                      alt={product.name}
+                      className="h-full w-full object-contain"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = "/product_image.jpeg";
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-white">
+                      {product.name}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      Unit Price: ₹{(unitPrice / 100).toFixed(2)}
+                    </p>
+                  </div>
                 </div>
 
                 {/* Quantity Controls (+ / -) */}

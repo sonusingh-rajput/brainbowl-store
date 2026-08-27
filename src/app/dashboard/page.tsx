@@ -2,7 +2,26 @@
 
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import { ShoppingBag, User, Phone, Mail, Calendar, ArrowLeft, LogOut, PackageCheck, RefreshCw } from 'lucide-react';
+import {
+  ShoppingBag,
+  User,
+  Phone,
+  Mail,
+  Calendar,
+  ArrowLeft,
+  LogOut,
+  PackageCheck,
+  RefreshCw,
+  ExternalLink,
+  FileText,
+  RotateCcw,
+  CheckCircle,
+  Truck,
+  AlertCircle,
+} from 'lucide-react';
+import { formatExternalUrl } from '@/lib/formatUrl';
+import InvoiceModal, { InvoiceOrder } from '@/components/InvoiceModal';
+import ReturnRequestModal, { ReturnModalOrder } from '@/components/ReturnRequestModal';
 
 interface UserProfile {
   id: string;
@@ -14,10 +33,24 @@ interface UserProfile {
 
 interface OrderItem {
   id: string;
-  receiptId: string; // Updated field name
+  receiptId: string;
   amount: number;
+  shippingCost?: number;
   status: string;
   shippingAddress: string;
+  customerName?: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  razorpayPaymentId?: string | null;
+  awbNumber?: string | null;
+  courierUrl?: string | null;
+  deliveredAt?: string | null;
+  returnReason?: string | null;
+  returnDetails?: string | null;
+  returnUpi?: string | null;
+  returnStatus?: string | null;
+  returnRequestedAt?: string | null;
+  returnAdminNotes?: string | null;
   createdAt: string;
 }
 
@@ -26,6 +59,14 @@ export default function UserDashboard() {
   const [orders, setOrders] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
+
+  // Invoice Modal State
+  const [selectedInvoiceOrder, setSelectedInvoiceOrder] = useState<InvoiceOrder | null>(null);
+  const [invoiceModalOpen, setInvoiceModalOpen] = useState(false);
+
+  // Return Request Modal State
+  const [selectedReturnOrder, setSelectedReturnOrder] = useState<ReturnModalOrder | null>(null);
+  const [returnModalOpen, setReturnModalOpen] = useState(false);
 
   const fetchDashboardData = async () => {
     setLoading(true);
@@ -66,6 +107,40 @@ export default function UserDashboard() {
     }
   };
 
+  const handleOpenInvoice = (order: OrderItem) => {
+    if (order.status !== 'PAID' && order.status !== 'SHIPPED' && order.status !== 'DELIVERED' && order.status !== 'RETURN_REQUESTED' && order.status !== 'RETURNED') {
+      toast.error('Tax invoice is only generated for PAID orders.');
+      return;
+    }
+
+    setSelectedInvoiceOrder({
+      id: order.id,
+      receiptId: order.receiptId,
+      amount: order.amount,
+      shippingCost: order.shippingCost || 0,
+      status: order.status,
+      customerName: user?.name || order.customerName || 'Valued Customer',
+      customerEmail: user?.email || order.customerEmail || '',
+      customerPhone: user?.phone || order.customerPhone || '',
+      shippingAddress: order.shippingAddress,
+      razorpayPaymentId: order.razorpayPaymentId,
+      awbNumber: order.awbNumber,
+      createdAt: order.createdAt,
+    });
+    setInvoiceModalOpen(true);
+  };
+
+  const handleOpenReturnModal = (order: OrderItem) => {
+    setSelectedReturnOrder({
+      id: order.id,
+      receiptId: order.receiptId || order.id.slice(0, 8),
+      amount: order.amount,
+      status: order.status,
+      customerName: user?.name || order.customerName,
+    });
+    setReturnModalOpen(true);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0a0a0a] text-white flex items-center justify-center font-sans">
@@ -103,8 +178,9 @@ export default function UserDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white p-6 md:p-10 font-sans">
-      <div className="mx-auto max-w-6xl">
+    <>
+      <div className="min-h-screen bg-[#0a0a0a] text-white p-6 md:p-10 font-sans print:hidden">
+        <div className="mx-auto max-w-6xl">
         {/* Top Header Navigation */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-8 border-b border-[#262626]">
           <div>
@@ -112,7 +188,7 @@ export default function UserDashboard() {
               <ArrowLeft className="h-3.5 w-3.5" /> Back to Store
             </a>
             <h1 className="text-3xl font-black tracking-tight">Customer Account</h1>
-            <p className="text-xs text-gray-400 mt-1">Manage profile details and track order deliveries.</p>
+            <p className="text-xs text-gray-400 mt-1">Manage profile details, track deliveries, and request returns.</p>
           </div>
 
           <div className="flex items-center gap-3">
@@ -193,6 +269,9 @@ export default function UserDashboard() {
                   <th className="py-3 px-3">Date</th>
                   <th className="py-3 px-3">Amount</th>
                   <th className="py-3 px-3">Status</th>
+                  <th className="py-3 px-3">AWB & Tracking</th>
+                  <th className="py-3 px-3">Invoice</th>
+                  <th className="py-3 px-3">Returns & Facility</th>
                   <th className="py-3 px-3">Shipping Address</th>
                 </tr>
               </thead>
@@ -200,7 +279,7 @@ export default function UserDashboard() {
                 {orders.length > 0 ? (
                   orders.map((order) => (
                     <tr key={order.id} className="hover:bg-[#1a1a1a] transition">
-                      <td className="py-4 px-3 font-semibold text-white">{order.receiptId || order.id.slice(0, 8)}</td>
+                      <td className="py-4 px-3 font-semibold text-white font-mono">{order.receiptId || order.id.slice(0, 8)}</td>
                       <td className="py-4 px-3 text-gray-400">
                         {new Date(order.createdAt).toLocaleDateString('en-IN')}
                       </td>
@@ -209,15 +288,112 @@ export default function UserDashboard() {
                       </td>
                       <td className="py-4 px-3">
                         <span
-                          className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                            order.status === 'PAID'
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                            order.status === 'DELIVERED'
+                              ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                              : order.status === 'SHIPPED'
+                              ? 'bg-cyan-950 text-cyan-400 border border-cyan-800'
+                              : order.status === 'RETURN_REQUESTED'
+                              ? 'bg-amber-950 text-amber-400 border border-amber-800'
+                              : order.status === 'RETURNED'
+                              ? 'bg-purple-950 text-purple-400 border border-purple-800'
+                              : order.status === 'PAID'
                               ? 'bg-green-950 text-green-400 border border-green-800'
+                              : order.status === 'CANCELLED'
+                              ? 'bg-red-950 text-red-400 border border-red-800'
                               : 'bg-amber-950 text-amber-400 border border-amber-800'
                           }`}
                         >
-                          {order.status === 'PAID' ? '✓ PAID & DISPATCHED' : 'PENDING PAYMENT'}
+                          {order.status === 'DELIVERED' && <CheckCircle className="h-3 w-3" />}
+                          {order.status === 'SHIPPED' && <Truck className="h-3 w-3" />}
+                          {order.status === 'RETURN_REQUESTED' && <RotateCcw className="h-3 w-3" />}
+                          {order.status === 'DELIVERED'
+                            ? 'DELIVERED'
+                            : order.status === 'SHIPPED'
+                            ? 'SHIPPED / IN TRANSIT'
+                            : order.status === 'RETURN_REQUESTED'
+                            ? 'RETURN UNDER REVIEW'
+                            : order.status === 'RETURNED'
+                            ? 'RETURN COMPLETED'
+                            : order.status === 'PAID'
+                            ? 'PAID & CONFIRMED'
+                            : order.status === 'CANCELLED'
+                            ? 'CANCELLED'
+                            : 'PENDING PAYMENT'}
                         </span>
+                        {order.deliveredAt && order.status === 'DELIVERED' && (
+                          <span className="block text-[10px] text-gray-500 mt-0.5">
+                            on {new Date(order.deliveredAt).toLocaleDateString('en-IN')}
+                          </span>
+                        )}
                       </td>
+                      {/* AWB & Tracking Link Column (Opens strictly external URL) */}
+                      <td className="py-4 px-3">
+                        {order.awbNumber ? (
+                          <div className="flex flex-col gap-1 items-start">
+                            <span className="font-mono text-xs text-[#22c55e] font-bold bg-green-950/40 px-2 py-0.5 rounded border border-green-800/40">
+                              {order.awbNumber}
+                            </span>
+                            <a
+                              href={formatExternalUrl(order.courierUrl, order.awbNumber)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[11px] text-blue-400 hover:text-blue-300 hover:underline font-semibold"
+                            >
+                              Track Courier <ExternalLink className="h-3 w-3" />
+                            </a>
+                          </div>
+                        ) : (
+                          <span className="text-[11px] text-gray-500 italic">
+                            Dispatch in progress
+                          </span>
+                        )}
+                      </td>
+                      {/* Invoice Column */}
+                      <td className="py-4 px-3">
+                        {order.status === 'PAID' || order.status === 'SHIPPED' || order.status === 'DELIVERED' || order.status === 'RETURN_REQUESTED' || order.status === 'RETURNED' ? (
+                          <button
+                            onClick={() => handleOpenInvoice(order)}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-[#262626] hover:bg-[#333333] text-gray-200 px-3 py-1.5 text-xs font-semibold transition border border-gray-700 hover:text-white cursor-pointer"
+                          >
+                            <FileText className="h-3.5 w-3.5 text-[#d4af37]" /> Invoice
+                          </button>
+                        ) : (
+                          <span className="text-[11px] text-gray-500 italic">
+                            Paid orders only
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Return Facility Column */}
+                      <td className="py-4 px-3">
+                        {order.status === 'DELIVERED' ? (
+                          <button
+                            onClick={() => handleOpenReturnModal(order)}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20 px-3 py-1.5 text-xs font-bold transition shadow-sm cursor-pointer"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" /> Request Return
+                          </button>
+                        ) : order.status === 'RETURN_REQUESTED' ? (
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-[11px] font-bold text-amber-400 flex items-center gap-1">
+                              <RotateCcw className="h-3 w-3 animate-spin" /> Return Pending
+                            </span>
+                            <span className="text-[10px] text-gray-400 truncate max-w-[140px]" title={order.returnReason || ''}>
+                              Reason: {order.returnReason}
+                            </span>
+                          </div>
+                        ) : order.status === 'RETURNED' ? (
+                          <span className="text-[11px] font-bold text-purple-400 flex items-center gap-1">
+                            <CheckCircle className="h-3 w-3" /> Refund Settled
+                          </span>
+                        ) : (
+                          <span className="text-[11px] text-gray-500 italic">
+                            Available once delivered
+                          </span>
+                        )}
+                      </td>
+
                       <td className="py-4 px-3 text-gray-400 max-w-xs truncate">
                         {order.shippingAddress}
                       </td>
@@ -225,7 +401,7 @@ export default function UserDashboard() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={5} className="py-12 text-center text-gray-500">
+                    <td colSpan={8} className="py-12 text-center text-gray-500">
                       <PackageCheck className="h-8 w-8 mx-auto text-gray-600 mb-2" />
                       <p className="text-sm font-semibold">No orders placed yet.</p>
                       <p className="text-xs text-gray-600 mt-1">
@@ -240,5 +416,29 @@ export default function UserDashboard() {
         </div>
       </div>
     </div>
+
+    {/* Printable Invoice Modal */}
+    <InvoiceModal
+      isOpen={invoiceModalOpen}
+      order={selectedInvoiceOrder}
+      onClose={() => {
+        setInvoiceModalOpen(false);
+        setSelectedInvoiceOrder(null);
+      }}
+    />
+
+    {/* Customer Return Request Modal */}
+    <ReturnRequestModal
+      isOpen={returnModalOpen}
+      order={selectedReturnOrder}
+      onClose={() => {
+        setReturnModalOpen(false);
+        setSelectedReturnOrder(null);
+      }}
+      onSuccess={() => {
+        fetchDashboardData();
+      }}
+    />
+  </>
   );
 }

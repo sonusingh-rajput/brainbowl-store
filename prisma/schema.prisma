@@ -20,7 +20,8 @@ model Product {
   id              String   @id @default(uuid())
   name            String
   sku             String?  @unique
-  price           Int      // in paise (e.g. 29900 = ₹299.00)
+  price           Int      // selling price in paise (e.g. 49900 = ₹499.00)
+  originalPrice   Int?     // MRP / Regular price in paise (e.g. 79900 = ₹799.00)
   stock           Int      @default(0)
   imageUrl        String?  // <-- Added Image Link URL
   description     String?
@@ -46,6 +47,16 @@ model Order {
   razorpayPaymentId String?
   awbNumber         String?
   courierUrl        String?
+  deliveredAt       DateTime?
+
+  // Return / Refund Facility
+  returnReason      String?  // e.g. "Damaged Item", "Wrong Item", "Quality Issue", "Expired", "Other"
+  returnDetails     String?  // Customer problem description
+  returnUpi         String?  // Customer UPI ID for refund
+  returnStatus      String?  // "PENDING", "APPROVED", "REJECTED", "COMPLETED"
+  returnRequestedAt DateTime?
+  returnAdminNotes  String?  // Admin notes / decision reason
+
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
