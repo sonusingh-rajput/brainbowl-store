@@ -29,8 +29,11 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10 pb-12 border-b border-[#2d4739]/60">
           {/* Column 1: Brand Info & Mission */}
           <div className="lg:col-span-2 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="relative h-12 w-12 rounded-full border border-[#d4af37]/40 bg-[#0b1711] p-1 flex items-center justify-center">
+            <div
+              onClick={scrollToTop}
+              className="flex items-center gap-3 cursor-pointer group w-fit"
+            >
+              <div className="relative h-12 w-12 rounded-full border border-[#d4af37]/40 bg-[#0b1711] p-1 flex items-center justify-center transition group-hover:border-[#d4af37]">
                 <Image
                   src="/Brain Bowl Logo.png"
                   alt="BrainBowl Logo"
@@ -39,7 +42,7 @@ export default function Footer() {
                   className="object-contain"
                 />
               </div>
-              <span className="font-serif text-2xl font-bold tracking-tight text-[#f4efe6]">
+              <span className="font-serif text-2xl font-bold tracking-tight text-[#f4efe6] group-hover:text-[#d4af37] transition">
                 Brain<span className="text-[#d4af37]">Bowl</span>
               </span>
             </div>

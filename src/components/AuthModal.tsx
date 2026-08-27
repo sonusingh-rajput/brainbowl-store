@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Mail, Lock, User as UserIcon, Phone, KeyRound, RefreshCw } from 'lucide-react';
+import { X, Mail, Lock, User as UserIcon, Phone, KeyRound, RefreshCw, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useResendTimer } from '@/hooks/useResendTimer';
 
@@ -18,8 +18,10 @@ const initialFormState = {
   email: '',
   phone: '',
   password: '',
+  confirmPassword: '',
   otp: '',
   newPassword: '',
+  confirmNewPassword: '',
 };
 
 export default function AuthModal({
@@ -32,6 +34,13 @@ export default function AuthModal({
   const [step, setStep] = useState<1 | 2>(1); // Step 1: Input details, Step 2: Verify OTP
   const [loading, setLoading] = useState(false);
 
+  // Show / Hide Password Visibility States
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
+
   const [formData, setFormData] = useState(initialFormState);
 
   // 60-Second Cooldown Timer Hook
@@ -41,6 +50,11 @@ export default function AuthModal({
     setMode(initialMode);
     setStep(1);
     setFormData(initialFormState);
+    setShowPassword(false);
+    setShowConfirmPassword(false);
+    setShowLoginPassword(false);
+    setShowNewPassword(false);
+    setShowConfirmNewPassword(false);
   }, [initialMode, isOpen]);
 
   if (!isOpen) return null;
@@ -69,6 +83,11 @@ export default function AuthModal({
   const handleClose = () => {
     setFormData(initialFormState);
     setStep(1);
+    setShowPassword(false);
+    setShowConfirmPassword(false);
+    setShowLoginPassword(false);
+    setShowNewPassword(false);
+    setShowConfirmNewPassword(false);
     onClose();
   };
 
@@ -77,6 +96,11 @@ export default function AuthModal({
     setMode(newMode);
     setStep(1);
     setFormData(initialFormState);
+    setShowPassword(false);
+    setShowConfirmPassword(false);
+    setShowLoginPassword(false);
+    setShowNewPassword(false);
+    setShowConfirmNewPassword(false);
   };
 
   // Send OTP Handler
@@ -89,6 +113,14 @@ export default function AuthModal({
         if (!formData.name.trim()) throw new Error('Please enter your full name.');
         validatePhone(formData.phone);
         validateStrongPassword(formData.password);
+
+        if (!formData.confirmPassword) {
+          throw new Error('Please enter the confirm password field.');
+        }
+
+        if (formData.password !== formData.confirmPassword) {
+          throw new Error('Passwords do not match. Please ensure Password and Confirm Password are the same.');
+        }
       }
 
       const res = await fetch('/api/auth/send-otp', {
@@ -158,6 +190,10 @@ export default function AuthModal({
         const cleanPhone = validatePhone(formData.phone);
         validateStrongPassword(formData.password);
 
+        if (formData.password !== formData.confirmPassword) {
+          throw new Error('Passwords do not match. Please ensure Password and Confirm Password match.');
+        }
+
         const res = await fetch('/api/auth/register-otp', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -172,6 +208,10 @@ export default function AuthModal({
         handleClose();
       } else if (mode === 'forgot') {
         validateStrongPassword(formData.newPassword);
+
+        if (formData.confirmNewPassword && formData.newPassword !== formData.confirmNewPassword) {
+          throw new Error('New passwords do not match. Please verify.');
+        }
 
         const res = await fetch('/api/auth/reset-password', {
           method: 'POST',
@@ -240,8 +280,8 @@ export default function AuthModal({
                 <label className="block text-xs font-semibold text-gray-400 uppercase">
                   Email Address
                 </label>
-                <div className="mt-1 flex items-center rounded-xl border border-[#262626] bg-[#0a0a0a] px-3 py-2.5">
-                  <Mail className="h-4 w-4 text-gray-500 mr-2" />
+                <div className="mt-1 flex items-center rounded-xl border border-[#262626] bg-[#0a0a0a] px-3 py-2.5 focus-within:border-[#22c55e]">
+                  <Mail className="h-4 w-4 text-gray-500 mr-2 shrink-0" />
                   <input
                     type="email"
                     required
@@ -261,8 +301,8 @@ export default function AuthModal({
                   <label className="block text-xs font-semibold text-gray-400 uppercase">
                     Full Name
                   </label>
-                  <div className="mt-1 flex items-center rounded-xl border border-[#262626] bg-[#0a0a0a] px-3 py-2.5">
-                    <UserIcon className="h-4 w-4 text-gray-500 mr-2" />
+                  <div className="mt-1 flex items-center rounded-xl border border-[#262626] bg-[#0a0a0a] px-3 py-2.5 focus-within:border-[#22c55e]">
+                    <UserIcon className="h-4 w-4 text-gray-500 mr-2 shrink-0" />
                     <input
                       type="text"
                       required
@@ -278,8 +318,8 @@ export default function AuthModal({
                   <label className="block text-xs font-semibold text-gray-400 uppercase">
                     Phone Number
                   </label>
-                  <div className="mt-1 flex items-center rounded-xl border border-[#262626] bg-[#0a0a0a] px-3 py-2.5">
-                    <Phone className="h-4 w-4 text-gray-500 mr-2" />
+                  <div className="mt-1 flex items-center rounded-xl border border-[#262626] bg-[#0a0a0a] px-3 py-2.5 focus-within:border-[#22c55e]">
+                    <Phone className="h-4 w-4 text-gray-500 mr-2 shrink-0" />
                     <input
                       type="tel"
                       required
@@ -294,24 +334,64 @@ export default function AuthModal({
                   </div>
                 </div>
 
+                {/* Password with Eye Icon Toggle */}
                 <div>
                   <label className="block text-xs font-semibold text-gray-400 uppercase">
                     High Security Password
                   </label>
-                  <div className="mt-1 flex items-center rounded-xl border border-[#262626] bg-[#0a0a0a] px-3 py-2.5">
-                    <Lock className="h-4 w-4 text-gray-500 mr-2" />
+                  <div className="mt-1 flex items-center rounded-xl border border-[#262626] bg-[#0a0a0a] px-3 py-2.5 focus-within:border-[#22c55e]">
+                    <Lock className="h-4 w-4 text-gray-500 mr-2 shrink-0" />
                     <input
-                      type="password"
+                      type={showPassword ? 'text' : 'password'}
                       required
                       placeholder="••••••••"
                       className="w-full bg-transparent text-sm text-white focus:outline-none"
                       value={formData.password}
                       onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="text-gray-400 hover:text-white transition p-1"
+                      title={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
                   </div>
                   <p className="mt-1 text-[10px] text-gray-500">
                     Must be 8+ chars with uppercase, lowercase, number, & special symbol.
                   </p>
+                </div>
+
+                {/* Confirm Password with Eye Icon Toggle */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 uppercase">
+                    Confirm Password
+                  </label>
+                  <div className="mt-1 flex items-center rounded-xl border border-[#262626] bg-[#0a0a0a] px-3 py-2.5 focus-within:border-[#22c55e]">
+                    <Lock className="h-4 w-4 text-gray-500 mr-2 shrink-0" />
+                    <input
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      required
+                      placeholder="••••••••"
+                      className="w-full bg-transparent text-sm text-white focus:outline-none"
+                      value={formData.confirmPassword}
+                      onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="text-gray-400 hover:text-white transition p-1"
+                      title={showConfirmPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  {formData.confirmPassword && (
+                    <p className={`mt-1 text-[10px] ${formData.password === formData.confirmPassword ? 'text-green-400' : 'text-red-400'}`}>
+                      {formData.password === formData.confirmPassword ? '✓ Passwords match' : '✗ Passwords do not match'}
+                    </p>
+                  )}
                 </div>
 
                 <button
@@ -332,8 +412,8 @@ export default function AuthModal({
                   <label className="block text-xs font-semibold text-gray-400 uppercase">
                     Enter 6-Digit OTP sent to {formData.email}
                   </label>
-                  <div className="mt-1 flex items-center rounded-xl border border-[#262626] bg-[#0a0a0a] px-3 py-2.5">
-                    <KeyRound className="h-4 w-4 text-[#22c55e] mr-2" />
+                  <div className="mt-1 flex items-center rounded-xl border border-[#262626] bg-[#0a0a0a] px-3 py-2.5 focus-within:border-[#22c55e]">
+                    <KeyRound className="h-4 w-4 text-[#22c55e] mr-2 shrink-0" />
                     <input
                       type="text"
                       required
@@ -369,24 +449,64 @@ export default function AuthModal({
               </div>
             )}
 
-            {/* Forgot Password New Password Field in Step 2 */}
+            {/* Forgot Password New Password Fields in Step 2 */}
             {mode === 'forgot' && step === 2 && (
-              <div>
-                <label className="block text-xs font-semibold text-gray-400 uppercase">
-                  New High Security Password
-                </label>
-                <div className="mt-1 flex items-center rounded-xl border border-[#262626] bg-[#0a0a0a] px-3 py-2.5">
-                  <Lock className="h-4 w-4 text-gray-500 mr-2" />
-                  <input
-                    type="password"
-                    required
-                    placeholder="••••••••"
-                    className="w-full bg-transparent text-sm text-white focus:outline-none"
-                    value={formData.newPassword}
-                    onChange={(e) => setFormData({ ...formData, newPassword: e.target.value })}
-                  />
+              <>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 uppercase">
+                    New High Security Password
+                  </label>
+                  <div className="mt-1 flex items-center rounded-xl border border-[#262626] bg-[#0a0a0a] px-3 py-2.5 focus-within:border-[#22c55e]">
+                    <Lock className="h-4 w-4 text-gray-500 mr-2 shrink-0" />
+                    <input
+                      type={showNewPassword ? 'text' : 'password'}
+                      required
+                      placeholder="••••••••"
+                      className="w-full bg-transparent text-sm text-white focus:outline-none"
+                      value={formData.newPassword}
+                      onChange={(e) => setFormData({ ...formData, newPassword: e.target.value })}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      className="text-gray-400 hover:text-white transition p-1"
+                      title={showNewPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
                 </div>
-              </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-400 uppercase">
+                    Confirm New Password
+                  </label>
+                  <div className="mt-1 flex items-center rounded-xl border border-[#262626] bg-[#0a0a0a] px-3 py-2.5 focus-within:border-[#22c55e]">
+                    <Lock className="h-4 w-4 text-gray-500 mr-2 shrink-0" />
+                    <input
+                      type={showConfirmNewPassword ? 'text' : 'password'}
+                      required
+                      placeholder="••••••••"
+                      className="w-full bg-transparent text-sm text-white focus:outline-none"
+                      value={formData.confirmNewPassword}
+                      onChange={(e) => setFormData({ ...formData, confirmNewPassword: e.target.value })}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmNewPassword(!showConfirmNewPassword)}
+                      className="text-gray-400 hover:text-white transition p-1"
+                      title={showConfirmNewPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showConfirmNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  {formData.confirmNewPassword && (
+                    <p className={`mt-1 text-[10px] ${formData.newPassword === formData.confirmNewPassword ? 'text-green-400' : 'text-red-400'}`}>
+                      {formData.newPassword === formData.confirmNewPassword ? '✓ Passwords match' : '✗ Passwords do not match'}
+                    </p>
+                  )}
+                </div>
+              </>
             )}
 
             {/* Login Mode Fields */}
@@ -396,16 +516,24 @@ export default function AuthModal({
                   <label className="block text-xs font-semibold text-gray-400 uppercase">
                     Password
                   </label>
-                  <div className="mt-1 flex items-center rounded-xl border border-[#262626] bg-[#0a0a0a] px-3 py-2.5">
-                    <Lock className="h-4 w-4 text-gray-500 mr-2" />
+                  <div className="mt-1 flex items-center rounded-xl border border-[#262626] bg-[#0a0a0a] px-3 py-2.5 focus-within:border-[#22c55e]">
+                    <Lock className="h-4 w-4 text-gray-500 mr-2 shrink-0" />
                     <input
-                      type="password"
+                      type={showLoginPassword ? 'text' : 'password'}
                       required
                       placeholder="••••••••"
                       className="w-full bg-transparent text-sm text-white focus:outline-none"
                       value={formData.password}
                       onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowLoginPassword(!showLoginPassword)}
+                      className="text-gray-400 hover:text-white transition p-1"
+                      title={showLoginPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showLoginPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
                   </div>
                 </div>
                 <div className="flex justify-end">

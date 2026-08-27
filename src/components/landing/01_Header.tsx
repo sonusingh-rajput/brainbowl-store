@@ -26,8 +26,17 @@ export default function Header({ user, onOpenAuth, onLogout }: HeaderProps) {
     <header className="sticky top-0 z-40 w-full border-b border-[#2d4739] bg-[#11241a]/90 backdrop-blur-md">
       <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 sm:px-8 py-3">
         
-        {/* LEFT: Logo Section */}
-        <Link href="/" className="flex items-center gap-2.5 sm:gap-3 group min-w-0 shrink-0">
+        {/* LEFT: Logo Section with Smooth Scroll to Top */}
+        <Link
+          href="/"
+          onClick={(e) => {
+            if (window.location.pathname === "/") {
+              e.preventDefault();
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }
+          }}
+          className="flex items-center gap-2.5 sm:gap-3 group min-w-0 shrink-0 cursor-pointer"
+        >
           <div className="relative h-10 w-10 sm:h-11 sm:w-11 shrink-0 overflow-hidden rounded-full border border-[#d4af37]/40 bg-[#0b1711] p-1 transition group-hover:border-[#d4af37]">
             <Image
               src="/Brain Bowl Logo.png"
