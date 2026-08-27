@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import Razorpay from "razorpay";
 import { prisma } from "@/lib/prisma";
 
@@ -9,6 +10,28 @@ const razorpay = new Razorpay({
 
 export async function POST(req: Request) {
   try {
+    // 1. Verify User Authentication via Session Cookie
+    const cookieStore = await cookies();
+    const userId = cookieStore.get("brainbowl_session")?.value;
+
+    if (!userId) {
+      return NextResponse.json(
+        { success: false, error: "Authentication required. Please sign in or register to place an order." },
+        { status: 401 }
+      );
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: "Active user session not found. Please sign in again." },
+        { status: 401 }
+      );
+    }
+
     const {
       amount,
       customerName,
@@ -44,9 +67,9 @@ export async function POST(req: Request) {
         receiptId: receiptId,
         amount: amount || 29900,
         status: "PENDING",
-        customerName,
-        customerEmail,
-        customerPhone,
+        customerName: customerName || user.name,
+        customerEmail: customerEmail || user.email,
+        customerPhone: customerPhone || user.phone,
         shippingAddress,
         razorpayOrderId: razorpayOrder.id,
         productId: product.id,

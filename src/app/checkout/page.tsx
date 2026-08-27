@@ -16,7 +16,12 @@ import {
   Globe,
   Plus,
   Minus,
+  Lock,
+  LogIn,
+  UserPlus,
 } from "lucide-react";
+import AuthModal from "@/components/AuthModal";
+import Link from "next/link";
 
 interface UserProfile {
   id: string;
@@ -30,6 +35,10 @@ export default function CheckoutPage() {
   const [submitting, setSubmitting] = useState(false);
   const [fetchingPincode, setFetchingPincode] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(null);
+
+  // Auth Modal State for Unauthenticated Visitors
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<"login" | "register">("login");
 
   // Single Item Base Price in Paise (₹299 = 29900 paise)
   const unitPrice = 29900;
@@ -71,18 +80,24 @@ export default function CheckoutPage() {
           });
         }
 
-
-        // 2. Fetch User Profile
+        // 2. Fetch User Profile & Check Authentication
         const userRes = await fetch("/api/auth/me");
         const userData = await userRes.json();
         if (userData.success && userData.user) {
-        setUser(userData.user);
-        setFormData((prev) => ({
-          ...prev,
-          name: userData.user.name || "",
-          email: userData.user.email || "",
-          phone: userData.user.phone || "",
-        }));
+          setUser(userData.user);
+          setFormData((prev) => ({
+            ...prev,
+            name: userData.user.name || "",
+            email: userData.user.email || "",
+            phone: userData.user.phone || "",
+          }));
+        } else {
+          setUser(null);
+          setAuthModalMode("login");
+          setAuthModalOpen(true);
+          toast("Please sign in or create an account to proceed with checkout", {
+            icon: "🔐",
+          });
         }
       } catch (err) {
         toast.error("Error loading session details");
@@ -148,6 +163,13 @@ export default function CheckoutPage() {
   const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (!user) {
+      setAuthModalMode("login");
+      setAuthModalOpen(true);
+      toast.error("Please sign in or register to complete payment");
+      return;
+    }
+
     if (!formData.district || !formData.state) {
       toast.error(
         "Please enter a valid 6-digit Pincode to match District & State",
@@ -177,6 +199,12 @@ export default function CheckoutPage() {
 
       const orderData = await orderRes.json();
       if (!orderData.success) {
+        if (orderRes.status === 401) {
+          setUser(null);
+          setAuthModalMode("login");
+          setAuthModalOpen(true);
+          throw new Error("Authentication required. Please sign in to place an order.");
+        }
         throw new Error(orderData.error || "Failed to initialize order");
       }
 
@@ -228,36 +256,112 @@ export default function CheckoutPage() {
     }
   };
 
+  // 1. Loading State
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0a0a0a] text-white flex items-center justify-center font-sans">
         <div className="flex items-center gap-2 text-sm text-gray-400">
           <RefreshCw className="h-4 w-4 animate-spin text-[#22c55e]" />
-          Loading checkout page...
+          Verifying session and loading checkout...
         </div>
       </div>
     );
   }
 
+  // 2. Unauthenticated State Gate
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] text-white p-6 md:p-12 font-sans flex items-center justify-center">
+        <div className="w-full max-w-md rounded-3xl border border-[#262626] bg-[#141414] p-8 text-center shadow-2xl">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-green-950/50 border border-green-800/40 text-[#22c55e]">
+            <Lock className="h-8 w-8" />
+          </div>
+
+          <h1 className="mt-6 text-2xl font-black">Sign In Required</h1>
+          <p className="mt-2 text-xs text-gray-400 leading-relaxed">
+            Please log in or create an account to proceed with checkout and track your BrainBowl orders.
+          </p>
+
+          <div className="mt-6 space-y-3">
+            <button
+              onClick={() => {
+                setAuthModalMode("login");
+                setAuthModalOpen(true);
+              }}
+              className="w-full flex items-center justify-center gap-2 rounded-xl bg-[#16a34a] py-3.5 text-xs font-bold text-white shadow-lg shadow-green-600/20 hover:bg-[#15803d] transition"
+            >
+              <LogIn className="h-4 w-4" />
+              Sign In to Your Account
+            </button>
+
+            <button
+              onClick={() => {
+                setAuthModalMode("register");
+                setAuthModalOpen(true);
+              }}
+              className="w-full flex items-center justify-center gap-2 rounded-xl border border-[#262626] bg-[#0a0a0a] py-3.5 text-xs font-bold text-[#f4efe6] hover:border-[#22c55e] hover:text-[#22c55e] transition"
+            >
+              <UserPlus className="h-4 w-4" />
+              Create New Account
+            </button>
+          </div>
+
+          <div className="mt-6 pt-6 border-t border-[#262626]">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-400 hover:text-white transition"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" /> Return to Store
+            </Link>
+          </div>
+        </div>
+
+        {/* Auth Modal for Checkout Gate */}
+        <AuthModal
+          isOpen={authModalOpen}
+          initialMode={authModalMode}
+          onClose={() => setAuthModalOpen(false)}
+          onAuthSuccess={(loggedInUser) => {
+            setUser(loggedInUser);
+            setFormData((prev) => ({
+              ...prev,
+              name: loggedInUser.name || "",
+              email: loggedInUser.email || "",
+              phone: loggedInUser.phone || "",
+            }));
+            setAuthModalOpen(false);
+            toast.success(`Welcome back, ${loggedInUser.name}! Proceeding with checkout.`);
+          }}
+        />
+      </div>
+    );
+  }
+
+  // 3. Authenticated Checkout Screen
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white p-6 md:p-12 font-sans">
       <script src="https://checkout.razorpay.com/v1/checkout.js" async />
 
       <div className="mx-auto max-w-4xl">
-        <a
-          href="/"
-          className="inline-flex items-center gap-1.5 text-xs font-bold text-[#22c55e] hover:underline mb-8"
-        >
-          <ArrowLeft className="h-4 w-4" /> Return to Store
-        </a>
+        <div className="flex items-center justify-between mb-8">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-[#22c55e] hover:underline"
+          >
+            <ArrowLeft className="h-4 w-4" /> Return to Store
+          </Link>
+
+          <div className="flex items-center gap-2 rounded-full border border-green-800/40 bg-green-950/40 px-3 py-1 text-xs text-green-400 font-semibold">
+            <span className="h-2 w-2 rounded-full bg-[#22c55e] animate-pulse" />
+            Signed in as {user.name}
+          </div>
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
           <div className="lg:col-span-7 rounded-3xl border border-[#262626] bg-[#141414] p-8">
-              <h1 className="text-2xl font-black">Shipping & Payment</h1>
+            <h1 className="text-2xl font-black">Shipping & Payment</h1>
             <p className="text-xs text-gray-400 mt-1">
-              {user
-                ? "✨ Profile auto-filled from database"
-                : "Enter shipping and contact details"}
+              ✨ Profile details auto-filled for {user.name}
             </p>
 
             <form onSubmit={handlePayment} className="mt-8 space-y-5">
@@ -509,6 +613,24 @@ export default function CheckoutPage() {
           </div>
         </div>
       </div>
+
+      {/* Auth Modal for Authenticated Screen in case needed */}
+      <AuthModal
+        isOpen={authModalOpen}
+        initialMode={authModalMode}
+        onClose={() => setAuthModalOpen(false)}
+        onAuthSuccess={(loggedInUser) => {
+          setUser(loggedInUser);
+          setFormData((prev) => ({
+            ...prev,
+            name: loggedInUser.name || "",
+            email: loggedInUser.email || "",
+            phone: loggedInUser.phone || "",
+          }));
+          setAuthModalOpen(false);
+          toast.success(`Welcome, ${loggedInUser.name}!`);
+        }}
+      />
     </div>
   );
 }

@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import bcrypt from 'bcryptjs';
 import { strongPasswordSchema, indianPhoneSchema } from '@/lib/zod-schemas';
 
 export async function POST(req: Request) {
@@ -14,7 +13,7 @@ export async function POST(req: Request) {
     const phoneValidation = indianPhoneSchema.safeParse(cleanPhone);
     if (!phoneValidation.success) {
       return NextResponse.json(
-        { success: false, error: phoneValidation.error.errors[0].message },
+        { success: false, error: phoneValidation.error.issues?.[0]?.message || 'Invalid phone number' },
         { status: 400 }
       );
     }
@@ -23,7 +22,7 @@ export async function POST(req: Request) {
     const passwordValidation = strongPasswordSchema.safeParse(password);
     if (!passwordValidation.success) {
       return NextResponse.json(
-        { success: false, error: passwordValidation.error.errors[0].message },
+        { success: false, error: passwordValidation.error.issues?.[0]?.message || 'Invalid password format' },
         { status: 400 }
       );
     }
@@ -52,14 +51,13 @@ export async function POST(req: Request) {
       );
     }
 
-    // 5. Hash Password & Save User
-    const hashedPassword = await bcrypt.hash(password, 10);
+    // 5. Save User
     const user = await prisma.user.create({
       data: {
         name,
         email: cleanEmail,
         phone: cleanPhone,
-        password: hashedPassword,
+        password: password,
       },
     });
 

@@ -15,7 +15,7 @@ async function main() {
   const product = await prisma.product.create({
     data: {
       name: 'BrainBowl Superfood Makhana',
-      tagline: 'Nourish Your Brain & Body — 100% Plant Based & Gluten Free',
+      description: 'Nourish Your Brain & Body — 100% Plant Based & Gluten Free',
       price: 29900, // ₹299.00
       stock: 500,
     },

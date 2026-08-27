@@ -100,6 +100,12 @@ export default function CheckoutModal({
   // ============================================================================
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!user) {
+      toast.error('Please sign in or register to complete payment');
+      return;
+    }
+
     setLoading(true);
 
     try {

@@ -46,6 +46,7 @@ interface HomeClientProps {
 export default function HomeClient({ initialProduct }: HomeClientProps) {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(null);
+  const [pendingCheckout, setPendingCheckout] = useState(false);
   const [authModal, setAuthModal] = useState<{
     isOpen: boolean;
     mode: 'login' | 'register';
@@ -80,9 +81,19 @@ export default function HomeClient({ initialProduct }: HomeClientProps) {
       toast.error('Failed to log out');
     }
   };
-const handleBuyNow = () => {
-  window.location.href = '/checkout';
-};
+
+  const handleBuyNow = () => {
+    if (!user) {
+      setPendingCheckout(true);
+      setAuthModal({ isOpen: true, mode: 'login' });
+      toast('Please sign in or create an account to proceed to checkout', {
+        icon: '🔐',
+      });
+      return;
+    }
+    window.location.href = '/checkout';
+  };
+
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white font-sans">
       <RazorpayScript />
@@ -90,7 +101,10 @@ const handleBuyNow = () => {
       {/* Header receiving user session from PostgreSQL */}
       <Header
         user={user}
-        onOpenAuth={(mode) => setAuthModal({ isOpen: true, mode })}
+        onOpenAuth={(mode) => {
+          setPendingCheckout(false);
+          setAuthModal({ isOpen: true, mode });
+        }}
         onLogout={handleLogout}
       />
 
@@ -121,18 +135,27 @@ const handleBuyNow = () => {
       <AuthModal
         isOpen={authModal.isOpen}
         initialMode={authModal.mode}
-        onClose={() => setAuthModal({ ...authModal, isOpen: false })}
-        onAuthSuccess={(loggedInUser) => setUser(loggedInUser)}
+        onClose={() => {
+          setAuthModal({ ...authModal, isOpen: false });
+          setPendingCheckout(false);
+        }}
+        onAuthSuccess={(loggedInUser) => {
+          setUser(loggedInUser);
+          if (pendingCheckout) {
+            setPendingCheckout(false);
+            window.location.href = '/checkout';
+          }
+        }}
       />
 
       {/* Checkout Modal for Razorpay Payments */}
       <CheckoutModal
-  productId={initialProduct.id}
-  price={initialProduct.price}
-  isOpen={isCheckoutOpen}
-  onClose={() => setIsCheckoutOpen(false)}
-  user={user} // Pass active user profile state
-/>
+        productId={initialProduct.id}
+        price={initialProduct.price}
+        isOpen={isCheckoutOpen}
+        onClose={() => setIsCheckoutOpen(false)}
+        user={user} // Pass active user profile state
+      />
     </main>
   );
 }
