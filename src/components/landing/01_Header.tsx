@@ -76,7 +76,7 @@ export default function Header({ user, onOpenAuth, onLogout }: HeaderProps) {
             <div className="flex items-center gap-2 sm:gap-3">
               <Link
                 href="/dashboard"
-                className="flex items-center gap-2 rounded-xl border border-[#2d4739] bg-[#0b1711] px-2.5 sm:px-3 py-1.5 transition hover:border-[#d4af37]"
+                className="flex items-center gap-2 rounded-xl border border-[#2d4739] bg-[#0b1712] px-2.5 sm:px-3 py-1.5 transition hover:border-[#d4af37]"
               >
                 <div className="flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded-full bg-[#d4af37] text-[10px] sm:text-xs font-bold text-[#0b1711] shrink-0">
                   {user.name.charAt(0).toUpperCase()}
