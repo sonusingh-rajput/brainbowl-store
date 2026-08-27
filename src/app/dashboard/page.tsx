@@ -367,31 +367,55 @@ export default function UserDashboard() {
 
                       {/* Return Facility Column */}
                       <td className="py-4 px-3">
-                        {order.status === 'DELIVERED' ? (
-                          <button
-                            onClick={() => handleOpenReturnModal(order)}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20 px-3 py-1.5 text-xs font-bold transition shadow-sm cursor-pointer"
-                          >
-                            <RotateCcw className="h-3.5 w-3.5" /> Request Return
-                          </button>
-                        ) : order.status === 'RETURN_REQUESTED' ? (
-                          <div className="flex flex-col gap-0.5">
-                            <span className="text-[11px] font-bold text-amber-400 flex items-center gap-1">
-                              <RotateCcw className="h-3 w-3 animate-spin" /> Return Pending
+                        {(() => {
+                          const deliveryTime = order.deliveredAt ? new Date(order.deliveredAt).getTime() : 0;
+                          const isWithin7Days = Boolean(deliveryTime && Date.now() - deliveryTime <= 7 * 24 * 60 * 60 * 1000);
+
+                          if (order.status === 'DELIVERED') {
+                            if (isWithin7Days) {
+                              return (
+                                <button
+                                  onClick={() => handleOpenReturnModal(order)}
+                                  className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20 px-3 py-1.5 text-xs font-bold transition shadow-sm cursor-pointer"
+                                >
+                                  <RotateCcw className="h-3.5 w-3.5" /> Request Return
+                                </button>
+                              );
+                            }
+                            return (
+                              <span className="text-[10px] text-gray-500 italic block">
+                                Return window expired (7 days past delivery)
+                              </span>
+                            );
+                          }
+
+                          if (order.status === 'RETURN_REQUESTED') {
+                            return (
+                              <div className="flex flex-col gap-0.5">
+                                <span className="text-[11px] font-bold text-amber-400 flex items-center gap-1">
+                                  <RotateCcw className="h-3 w-3 animate-spin" /> Return Pending
+                                </span>
+                                <span className="text-[10px] text-gray-400 truncate max-w-[140px]" title={order.returnReason || ''}>
+                                  Reason: {order.returnReason}
+                                </span>
+                              </div>
+                            );
+                          }
+
+                          if (order.status === 'RETURNED') {
+                            return (
+                              <span className="text-[11px] font-bold text-purple-400 flex items-center gap-1">
+                                <CheckCircle className="h-3 w-3" /> Refund Settled
+                              </span>
+                            );
+                          }
+
+                          return (
+                            <span className="text-[11px] text-gray-500 italic">
+                              Available once delivered
                             </span>
-                            <span className="text-[10px] text-gray-400 truncate max-w-[140px]" title={order.returnReason || ''}>
-                              Reason: {order.returnReason}
-                            </span>
-                          </div>
-                        ) : order.status === 'RETURNED' ? (
-                          <span className="text-[11px] font-bold text-purple-400 flex items-center gap-1">
-                            <CheckCircle className="h-3 w-3" /> Refund Settled
-                          </span>
-                        ) : (
-                          <span className="text-[11px] text-gray-500 italic">
-                            Available once delivered
-                          </span>
-                        )}
+                          );
+                        })()}
                       </td>
 
                       <td className="py-4 px-3 text-gray-400 max-w-xs truncate">

@@ -44,6 +44,23 @@ export async function POST(req: Request) {
       );
     }
 
+    if (order.status !== 'DELIVERED') {
+      return NextResponse.json(
+        { success: false, error: 'Returns are only allowed for delivered orders.' },
+        { status: 400 }
+      );
+    }
+
+    // Enforce 7 days return validity period after delivery
+    const deliveryTime = order.deliveredAt ? new Date(order.deliveredAt).getTime() : 0;
+    const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+    if (!deliveryTime || Date.now() - deliveryTime > SEVEN_DAYS_MS) {
+      return NextResponse.json(
+        { success: false, error: 'The 7-day return period for this order has expired.' },
+        { status: 400 }
+      );
+    }
+
     // Update order with Return Request details
     const updatedOrder = await prisma.order.update({
       where: { id: order.id },

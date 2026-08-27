@@ -264,15 +264,21 @@ export default function OrderLookupPage() {
                         </button>
                       )}
 
-                      {/* Return Action Button */}
-                      {order.status === 'DELIVERED' && (
-                        <button
-                          onClick={() => handleOpenReturnModal(order)}
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20 px-3 py-1.5 text-xs font-bold transition cursor-pointer"
-                        >
-                          <RotateCcw className="h-3.5 w-3.5" /> Return
-                        </button>
-                      )}
+                      {/* Return Action Button (Only within 7 days of delivery) */}
+                      {order.status === 'DELIVERED' && (() => {
+                        const deliveryTime = order.deliveredAt ? new Date(order.deliveredAt).getTime() : 0;
+                        const isWithin7Days = Boolean(deliveryTime && Date.now() - deliveryTime <= 7 * 24 * 60 * 60 * 1000);
+                        return isWithin7Days ? (
+                          <button
+                            onClick={() => handleOpenReturnModal(order)}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20 px-3 py-1.5 text-xs font-bold transition cursor-pointer"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" /> Return
+                          </button>
+                        ) : (
+                          <span className="text-[10px] text-gray-500 italic">Return period expired (7-day policy)</span>
+                        );
+                      })()}
                     </div>
                   </div>
 

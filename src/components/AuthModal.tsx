@@ -109,9 +109,10 @@ export default function AuthModal({
     try {
       if (!formData.email) throw new Error('Please enter your email address.');
 
+      let cleanPhone = '';
       if (type === 'REGISTER') {
         if (!formData.name.trim()) throw new Error('Please enter your full name.');
-        validatePhone(formData.phone);
+        cleanPhone = validatePhone(formData.phone);
         validateStrongPassword(formData.password);
 
         if (!formData.confirmPassword) {
@@ -126,7 +127,7 @@ export default function AuthModal({
       const res = await fetch('/api/auth/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: formData.email, type }),
+        body: JSON.stringify({ email: formData.email, phone: cleanPhone, type }),
       });
 
       const data = await res.json();
@@ -149,10 +150,11 @@ export default function AuthModal({
     setLoading(true);
     try {
       const type = mode === 'register' ? 'REGISTER' : 'FORGOT_PASSWORD';
+      const cleanPhone = mode === 'register' ? formData.phone.replace(/\D/g, '') : '';
       const res = await fetch('/api/auth/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: formData.email, type }),
+        body: JSON.stringify({ email: formData.email, phone: cleanPhone, type }),
       });
 
       const data = await res.json();
