@@ -348,14 +348,14 @@ Fill in your actual service credentials:
 DATABASE_URL="postgresql://postgres:yourpassword@localhost:5432/brainbowl?sslmode=disable"
 
 # 2. ADMIN CREDENTIALS (/admin)
-ADMIN_USERNAME="admin"
-ADMIN_PASSWORD="supersecretadminpassword123"
+ADMIN_USERNAME="
+ADMIN_PASSWORD=""
 
 # 3. RAZORPAY PAYMENT GATEWAY
-RAZORPAY_KEY_ID="rzp_test_YourKeyIdHere"
-RAZORPAY_KEY_SECRET="YourRazorpayKeySecretHere"
-RAZORPAY_WEBHOOK_SECRET="YourRazorpayWebhookSecretHere"
-NEXT_PUBLIC_RAZORPAY_KEY_ID="rzp_test_YourKeyIdHere"
+RAZORPAY_KEY_ID=""
+RAZORPAY_KEY_SECRET=""
+RAZORPAY_WEBHOOK_SECRET=""
+NEXT_PUBLIC_RAZORPAY_KEY_ID=""
 
 # 4. EMAIL & OTP AUTHENTICATION (SMTP)
 SMTP_HOST="smtp.gmail.com"
