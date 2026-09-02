@@ -1,48 +1,35 @@
-name: BrainBowl CI/CD Pipeline
+name: CI
 
 on:
   push:
     branches:
       - main
-      - master
+      - develop
 
   pull_request:
     branches:
       - main
-      - master
+      - develop
 
 jobs:
-  build-and-test:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 📥 Checkout Repository
-        uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v6
 
-      - name: 🟢 Setup Node.js 22.x
-        uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
         with:
           node-version: 22
-<<<<<<< HEAD
-          cache: 'npm'
-=======
           cache: npm
->>>>>>> b51f88b (Ci-cd Pipe line fix)
 
-      - name: 📦 Install Dependencies
+      - name: Install dependencies
         run: npm ci
 
-      - name: 🗄️ Generate Prisma Client
-        run: npx prisma generate
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: Run lint
+        run: npm run lint
 
-      - name: 🔍 TypeScript Verification
-        run: npx tsc --noEmit
-
-      - name: 🚀 Production Build Check
+      - name: Build Next.js
         run: npm run build
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          NEXT_PUBLIC_APP_URL: ${{ secrets.NEXT_PUBLIC_APP_URL }}
-          NEXT_PUBLIC_RAZORPAY_KEY_ID: ${{ secrets.NEXT_PUBLIC_RAZORPAY_KEY_ID }}
