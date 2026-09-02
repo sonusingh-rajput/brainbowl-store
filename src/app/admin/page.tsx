@@ -190,30 +190,6 @@ export default function AdminDashboard() {
   // ============================================================================
   // 4. DATA FETCHING & LIFECYCLE
   // ============================================================================
-  useEffect(() => {
-    checkAuth();
-  }, []);
-
-  const checkAuth = async () => {
-    try {
-      const res = await fetch('/api/admin/check');
-      if (res.status === 401) {
-        setAuthenticated(false);
-        return;
-      }
-      const data = await res.json();
-      if (data.authenticated) {
-        setAuthenticated(true);
-        fetchAllData();
-        fetchSettings();
-      } else {
-        setAuthenticated(false);
-      }
-    } catch {
-      setAuthenticated(false);
-    }
-  };
-
   const fetchSettings = async () => {
     try {
       const res = await fetch('/api/admin/settings');
@@ -285,6 +261,30 @@ export default function AdminDashboard() {
       setLoading(false);
     }
   };
+
+  const checkAuth = async () => {
+    try {
+      const res = await fetch('/api/admin/check');
+      if (res.status === 401) {
+        setAuthenticated(false);
+        return;
+      }
+      const data = await res.json();
+      if (data.authenticated) {
+        setAuthenticated(true);
+        fetchAllData();
+        fetchSettings();
+      } else {
+        setAuthenticated(false);
+      }
+    } catch {
+      setAuthenticated(false);
+    }
+  };
+
+  useEffect(() => {
+    checkAuth();
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
