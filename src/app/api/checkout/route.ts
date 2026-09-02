@@ -3,10 +3,11 @@ import { cookies } from "next/headers";
 import Razorpay from "razorpay";
 import { prisma } from "@/lib/prisma";
 
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID || "",
-  key_secret: process.env.RAZORPAY_KEY_SECRET || "",
-});
+const getRazorpay = () =>
+  new Razorpay({
+    key_id: process.env.RAZORPAY_KEY_ID || "rzp_test_placeholder",
+    key_secret: process.env.RAZORPAY_KEY_SECRET || "placeholder_secret",
+  });
 
 export async function POST(req: Request) {
   try {
@@ -53,6 +54,7 @@ export async function POST(req: Request) {
     }
 
     const receiptId = `rcpt_${Date.now()}`;
+    const razorpay = getRazorpay();
 
     // Create Razorpay Order
     const razorpayOrder = await razorpay.orders.create({
