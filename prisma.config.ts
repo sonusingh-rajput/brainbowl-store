@@ -1,15 +1,15 @@
-// prisma.config.ts
-import { defineConfig } from '@prisma/config';
-import dotenv from 'dotenv';
-
-// Load environment variables from .env.local
-dotenv.config({ path: '.env.local' });
+import "dotenv/config";
+import { defineConfig, env } from "prisma/config";
 
 export default defineConfig({
+  schema: "prisma/schema.prisma",
+
   migrations: {
-    seed: 'npx ts-node --compiler-options {"module":"CommonJS"} ./prisma/seed.ts',
+    path: "prisma/migrations",
+    seed: "npx ts-node --compiler-options {\"module\":\"CommonJS\"} ./prisma/seed.ts",
   },
+
   datasource: {
-    url: process.env.DATABASE_URL,
+    url: env("DATABASE_URL"),
   },
 });
