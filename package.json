@@ -31,6 +31,8 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@emnapi/core": "^1.11.3",
+    "@emnapi/runtime": "^1.11.3",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^22.0.0",
     "@types/pg": "^8.20.3",
